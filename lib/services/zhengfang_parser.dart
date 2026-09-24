@@ -40,14 +40,18 @@ class ZhengfangParser {
         lines,
         RegExp(r'(?:教师|老师|主讲)\s*[:：]?\s*(.+)'),
       );
-      final location = _field(
-        _firstNonEmpty([
-          item['location']?.toString(),
-          item['cdmc']?.toString(),
-          item['jxdd']?.toString(),
-        ]),
-        lines,
-        RegExp(r'(?:上课地点|地点|教室)\s*[:：]?\s*(.+)'),
+      final location = _cleanLocation(
+        _field(
+          _firstNonEmpty([
+            item['location']?.toString(),
+            item['cdmc']?.toString(),
+            item['jxdd']?.toString(),
+            item['jxcdmc']?.toString(),
+            item['skdd']?.toString(),
+          ]),
+          lines,
+          RegExp(r'(?:上课地点|地点|教室|场地)\s*[:：]?\s*(.+)'),
+        ),
       );
 
       final fingerprint = [
@@ -159,6 +163,14 @@ class ZhengfangParser {
     return value
         .replaceAll(RegExp(r'[\u00a0\t]+'), ' ')
         .replaceAll(RegExp(r' +'), ' ')
+        .trim();
+  }
+
+  static String _cleanLocation(String value) {
+    return _clean(value)
+        .replaceFirst(RegExp(r'^[^A-Za-z0-9\u3400-\u9fff]+'), '')
+        .replaceFirst(RegExp(r'^(?:上课地点|地点|教室|场地)\s*[:：]?\s*'), '')
+        .replaceFirst(RegExp(r'\s+(?:教师|老师|主讲)\s*[:：].*$'), '')
         .trim();
   }
 }

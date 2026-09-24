@@ -35,12 +35,20 @@ class _WebDavScreenState extends State<WebDavScreen> {
   }
 
   Future<void> _load() async {
-    final config = await WebDavService.instance.loadConfig();
-    if (!mounted) return;
-    _url.text = config.url;
-    _username.text = config.username;
-    _password.text = config.password;
-    setState(() => _loading = false);
+    try {
+      final config = await WebDavService.instance.loadConfig();
+      if (!mounted) return;
+      _url.text = config.url;
+      _username.text = config.username;
+      _password.text = config.password;
+      setState(() => _loading = false);
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _loading = false;
+        _status = '安全存储读取失败：$error';
+      });
+    }
   }
 
   WebDavConfig get _config => WebDavConfig(

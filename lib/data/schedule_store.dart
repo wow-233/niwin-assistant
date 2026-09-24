@@ -120,7 +120,7 @@ class ScheduleStore extends ChangeNotifier {
     final savedStart = _preferences.getString(_semesterStartKey);
     semesterStart = savedStart == null
         ? thisMonday
-        : DateTime.parse(savedStart);
+        : (DateTime.tryParse(savedStart) ?? thisMonday);
     showWeekends = _preferences.getBool(_weekendsKey) ?? true;
     glassEffect = _preferences.getBool(_glassKey) ?? true;
     notificationsEnabled = _preferences.getBool(_notificationsKey) ?? false;
@@ -132,9 +132,16 @@ class ScheduleStore extends ChangeNotifier {
     customFontName = _preferences.getString(_fontNameKey);
     courseReminderMinutes = _preferences.getInt(_courseReminderKey) ?? 15;
     backgroundPath = _preferences.getString(_backgroundPathKey);
-    if (backgroundPath != null && !File(backgroundPath!).existsSync()) {
-      backgroundPath = null;
-      await _preferences.remove(_backgroundPathKey);
+    if (backgroundPath != null) {
+      try {
+        if (!File(backgroundPath!).existsSync()) {
+          backgroundPath = null;
+          await _preferences.remove(_backgroundPathKey);
+        }
+      } catch (_) {
+        backgroundPath = null;
+        await _preferences.remove(_backgroundPathKey);
+      }
     }
     backgroundOpacity = _preferences.getDouble(_backgroundOpacityKey) ?? 0.24;
     cellHeight = _preferences.getDouble(_cellHeightKey) ?? 68;
@@ -176,7 +183,8 @@ class ScheduleStore extends ChangeNotifier {
               (item) => Course.fromJson(item as Map<String, dynamic>),
             ),
           );
-      } on FormatException {
+      } catch (_) {
+        _courses.clear();
         // Keep the app usable if an old/corrupt local payload is encountered.
       }
     }
@@ -249,7 +257,8 @@ class ScheduleStore extends ChangeNotifier {
               (item) => Homework.fromJson(item as Map<String, dynamic>),
             ),
           );
-      } on FormatException {
+      } catch (_) {
+        _homework.clear();
         // Ignore an old/corrupt payload and keep the rest of the app available.
       }
     }
@@ -265,7 +274,7 @@ class ScheduleStore extends ChangeNotifier {
                   QuickLink.fromJson(Map<String, dynamic>.from(item as Map)),
             ),
           );
-      } on FormatException {
+      } catch (_) {
         _quickLinks.clear();
       }
     }
@@ -287,7 +296,7 @@ class ScheduleStore extends ChangeNotifier {
               ),
             ),
           );
-      } on FormatException {
+      } catch (_) {
         _countdowns.clear();
       }
     }

@@ -178,7 +178,7 @@ class SettingsScreen extends StatelessWidget {
                 SwitchListTile(
                   secondary: const Icon(Icons.notifications_outlined),
                   title: const Text('系统提醒'),
-                  subtitle: const Text('课程和待办通过通知栏提醒'),
+                  subtitle: const Text('先开启通知；无精确闹钟权限时自动使用省电模式'),
                   value: store.notificationsEnabled,
                   onChanged: (value) => _toggleNotifications(context, value),
                 ),
@@ -413,27 +413,37 @@ class SettingsScreen extends StatelessWidget {
   }
 
   Future<void> _toggleNotifications(BuildContext context, bool value) async {
-    if (value) {
-      final granted = await NotificationService.instance.requestPermission();
-      if (!granted) {
-        await store.setNotificationsEnabled(false);
-        if (!context.mounted) return;
-        ScaffoldMessenger.of(context)
-            .showSnackBar(const SnackBar(content: Text('没有通知权限，提醒未开启')));
-        return;
+    try {
+      if (value) {
+        final granted = await NotificationService.instance.requestPermission();
+        if (!granted) {
+          await store.setNotificationsEnabled(false);
+          if (!context.mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('系统通知权限未开启，请在系统设置中允许通知')),
+          );
+          return;
+        }
       }
-    }
-    await store.setNotificationsEnabled(value);
-    if (value) {
-      final result = await store.rescheduleNotifications();
-      if (!context.mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            '已登记 ${result.total} 个提醒${result.exact ? ' · 精确模式' : ' · 省电模式'}',
+      await store.setNotificationsEnabled(value);
+      if (value) {
+        final result = await store.rescheduleNotifications();
+        if (!context.mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              result.error == null
+                  ? '提醒已开启：登记 ${result.total} 个 · ${result.exact ? '精确模式' : '省电模式'}'
+                  : '提醒已开启，但部分登记失败：${result.error}',
+            ),
           ),
-        ),
-      );
+        );
+      }
+    } catch (error) {
+      await store.setNotificationsEnabled(false);
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('通知开启失败：$error')));
     }
   }
 

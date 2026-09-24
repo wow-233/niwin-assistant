@@ -47,20 +47,54 @@ const wzuAssistantScript = r'''
     }
     return '';
   };
+  const apiField = (object, names) => {
+    if (!object || typeof object !== 'object') return '';
+    const keys = Object.keys(object);
+    for (const name of names) {
+      const key = keys.find(value => value.toLowerCase() === name.toLowerCase());
+      if (!key) continue;
+      const value = object[key];
+      if (value !== null && value !== undefined && typeof value !== 'object' && clean(value)) {
+        return clean(value);
+      }
+    }
+    return '';
+  };
+  const titledField = (node, labels) => {
+    if (!node || !node.querySelectorAll) return '';
+    for (const element of node.querySelectorAll('[title], [data-original-title], [aria-label]')) {
+      const hint = clean(element.getAttribute('title') ||
+        element.getAttribute('data-original-title') || element.getAttribute('aria-label'));
+      if (!labels.some(label => hint.includes(label))) continue;
+      const own = clean(element.textContent);
+      if (own && !labels.some(label => own === label)) return own;
+      let value = '';
+      for (let sibling = element.nextSibling; sibling; sibling = sibling.nextSibling) {
+        if (sibling.nodeName === 'BR') break;
+        value += ' ' + clean(sibling.textContent);
+      }
+      if (clean(value)) return clean(value);
+    }
+    return '';
+  };
   const normalizeApiItem = (course) => {
-    const sections = sectionsFromText(course.jcs || course.jc || '');
-    const day = intValue(course.xqj);
-    if (!clean(course.kcmc) || !(day >= 1 && day <= 7) || !sections) return null;
+    const sectionsText = apiField(course, ['jcs', 'jc', 'jcsText']);
+    const sections = sectionsFromText(sectionsText);
+    const day = intValue(apiField(course, ['xqj', 'weekday', 'day']));
+    const name = apiField(course, ['kcmc', 'courseName']);
+    if (!name || !(day >= 1 && day <= 7) || !sections) return null;
     return {
-      name: clean(course.kcmc),
+      name,
       text: '',
       day,
       startSection: sections[0],
       sectionCount: sections[1] - sections[0] + 1,
-      sectionsText: clean(course.jcs),
-      weeksText: clean(course.zcd),
-      teacher: clean(course.xm || course.jsxm),
-      location: clean(course.cdmc || course.jxdd || course.jxcdmc || course.cd || ''),
+      sectionsText,
+      weeksText: apiField(course, ['zcd', 'weeks', 'weekText']),
+      teacher: apiField(course, ['xm', 'jsxm', 'teacher', 'rkjs']),
+      location: apiField(course, [
+        'cdmc', 'jxdd', 'jxcdmc', 'cd', 'classroom', 'roomName', 'skdd', 'jsmc'
+      ]),
       confidence: 'api'
     };
   };
@@ -205,8 +239,11 @@ const wzuAssistantScript = r'''
           startSection: start,
           sectionCount: count,
           weeksText,
-          teacher: clean(attr(node, ['xm', 'teacher', 'jsxm']) || field(text, ['教师', '老师', '主讲'])),
-          location: clean(attr(node, ['cdmc', 'location', 'room']) || field(text, ['上课地点', '地点', '教室'])),
+          teacher: clean(attr(node, ['xm', 'teacher', 'jsxm']) ||
+            titledField(node, ['教师', '老师', '主讲']) || field(text, ['教师', '老师', '主讲'])),
+          location: clean(attr(node, ['cdmc', 'jxdd', 'jxcdmc', 'location', 'room']) ||
+            titledField(node, ['上课地点', '地点', '教室', '场地']) ||
+            field(text, ['上课地点', '地点', '教室', '场地'])),
           confidence: 'dom-matrix'
         });
       }

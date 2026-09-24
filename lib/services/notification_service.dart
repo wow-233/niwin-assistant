@@ -28,6 +28,7 @@ class NotificationService {
   static final instance = NotificationService._();
   final _plugin = FlutterLocalNotificationsPlugin();
   bool _ready = false;
+  Future<void>? _initializing;
   Future<NotificationScheduleResult> _queue = Future.value(
     const NotificationScheduleResult(
       scheduledCourses: 0,
@@ -38,6 +39,18 @@ class NotificationService {
 
   Future<void> initialize() async {
     if (_ready || !Platform.isAndroid) return;
+    final pending = _initializing;
+    if (pending != null) return pending;
+    final operation = _initializeAndroid();
+    _initializing = operation;
+    try {
+      await operation;
+    } finally {
+      if (identical(_initializing, operation)) _initializing = null;
+    }
+  }
+
+  Future<void> _initializeAndroid() async {
     tz_data.initializeTimeZones();
     try {
       final info = await FlutterTimezone.getLocalTimezone();
@@ -45,12 +58,12 @@ class NotificationService {
     } catch (_) {
       tz.setLocalLocation(tz.getLocation('Asia/Shanghai'));
     }
-    await _plugin.initialize(
+    final initialized = await _plugin.initialize(
       settings: const InitializationSettings(
         android: AndroidInitializationSettings('ic_stat_niwin'),
       ),
     );
-    _ready = true;
+    _ready = initialized != false;
   }
 
   AndroidFlutterLocalNotificationsPlugin? get _android => _plugin
@@ -59,17 +72,22 @@ class NotificationService {
       >();
 
   Future<bool> requestPermission() async {
-    await initialize();
-    if (!Platform.isAndroid) return false;
-    final granted = await _android?.requestNotificationsPermission() ?? false;
-    if (granted) {
+    try {
+      await initialize();
+      if (!Platform.isAndroid || !_ready) return false;
+      final android = _android;
+      final requested = await android?.requestNotificationsPermission();
+      if (requested == true) return true;
+      // Some OEM implementations return null after the settings activity;
+      // always verify the effective app-level notification state.
+      return await android?.areNotificationsEnabled() ?? false;
+    } catch (_) {
       try {
-        await _android?.requestExactAlarmsPermission();
+        return await _android?.areNotificationsEnabled() ?? false;
       } catch (_) {
-        // Inexact alarms remain available when the user declines.
+        return false;
       }
     }
-    return granted;
   }
 
   Future<void> showTestNotification() async {

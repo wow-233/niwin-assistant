@@ -70,7 +70,8 @@ class QuzhiDevice {
     buildingName,
     floorName,
     roomName,
-  ].where((value) => value.isNotEmpty).join();
+  ].where((value) => value.isNotEmpty).join(' · ');
+  String get identifier => snCode.isNotEmpty ? snCode : address;
 
   Map<String, Object> toJson() => {
     'snCode': snCode,
@@ -309,6 +310,24 @@ class QuzhiService {
       roomName: data['FJName']?.toString() ?? '',
       projectName: data['PrjName']?.toString() ?? '',
       rssi: candidate.rssi,
+    );
+  }
+
+  Future<List<QuzhiDevice>> resolveNearby(
+    QuzhiSession session,
+    List<QuzhiDevice> candidates,
+  ) async {
+    final sorted = List<QuzhiDevice>.of(candidates)
+      ..sort((a, b) => b.rssi.compareTo(a.rssi));
+    final limited = sorted.take(10);
+    return Future.wait(
+      limited.map((candidate) async {
+        try {
+          return await resolveDevice(session, candidate);
+        } catch (_) {
+          return candidate;
+        }
+      }),
     );
   }
 

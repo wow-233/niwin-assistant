@@ -1163,7 +1163,7 @@ class _ProfilePage extends StatelessWidget {
                   child: ListTile(
                     leading: const Icon(Icons.account_tree_outlined),
                     title: const Text('学生学业情况'),
-                    subtitle: const Text('登录教务系统后读取完整学业信息'),
+                    subtitle: const Text('读取一次后保存在本机，可随时更新'),
                     trailing: const Icon(Icons.chevron_right_rounded),
                     onTap: () => Navigator.of(context).push(
                       MaterialPageRoute<void>(
@@ -1179,7 +1179,7 @@ class _ProfilePage extends StatelessWidget {
                   clipBehavior: Clip.antiAlias,
                   child: ListTile(
                     leading: const Icon(Icons.shower_outlined),
-                    title: const Text('打开洗澡'),
+                    title: const Text('洗澡'),
                     subtitle: const Text('应用内登录、扫描设备并控制热水'),
                     trailing: const Icon(Icons.chevron_right_rounded),
                     onTap: () => Navigator.of(context).push(
@@ -1336,17 +1336,25 @@ class _ProfilePage extends StatelessWidget {
   }
 
   Future<void> _toggleNotifications(BuildContext context, bool value) async {
-    if (value) {
-      final granted = await NotificationService.instance.requestPermission();
-      if (!granted) {
-        await store.setNotificationsEnabled(false);
-        if (!context.mounted) return;
-        ScaffoldMessenger.of(context)
-            .showSnackBar(const SnackBar(content: Text('没有通知权限，提醒未开启')));
-        return;
+    try {
+      if (value) {
+        final granted = await NotificationService.instance.requestPermission();
+        if (!granted) {
+          await store.setNotificationsEnabled(false);
+          if (!context.mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('系统通知权限未开启，请在系统设置中允许通知')),
+          );
+          return;
+        }
       }
+      await store.setNotificationsEnabled(value);
+    } catch (error) {
+      await store.setNotificationsEnabled(false);
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('通知开启失败：$error')));
     }
-    await store.setNotificationsEnabled(value);
   }
 }
 

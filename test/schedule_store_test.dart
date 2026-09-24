@@ -98,4 +98,22 @@ void main() {
     store.dispose();
     restored.dispose();
   });
+
+  test('corrupt local payloads do not prevent startup', () async {
+    SharedPreferences.setMockInitialValues({
+      'semesterStart.v1': 'not-a-date',
+      'courses.v1': '[{"id": 3}]',
+      'homework.v1': '{broken',
+      'quickLinks.v1': '[null]',
+      'countdowns.v1': '[{"targetDate": false}]',
+    });
+    final store = ScheduleStore(await SharedPreferences.getInstance());
+    await expectLater(store.load(), completes);
+    expect(store.isLoaded, isTrue);
+    expect(store.courses, isEmpty);
+    expect(store.homework, isEmpty);
+    expect(store.quickLinks.single.id, 'webvpn');
+    expect(store.countdowns, isEmpty);
+    store.dispose();
+  });
 }

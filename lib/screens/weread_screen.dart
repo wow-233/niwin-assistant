@@ -22,8 +22,14 @@ class _ExperimentalScreenState extends State<ExperimentalScreen> {
   }
 
   Future<void> _loadKey() async {
-    _maskedKey = await WereadService.instance.maskedApiKey();
-    if (mounted) setState(() {});
+    try {
+      _maskedKey = await WereadService.instance.maskedApiKey();
+      if (mounted) setState(() {});
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('安全存储读取失败：$error')));
+    }
   }
 
   Future<void> _editKey() async {

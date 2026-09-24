@@ -35,18 +35,26 @@ class _ShowerScreenState extends State<ShowerScreen> {
   }
 
   Future<void> _load() async {
-    final session = await _service.loadSession();
-    final devices = await _service.loadDevices();
-    final order = await _service.loadActiveOrder();
-    if (!mounted) return;
-    setState(() {
-      _session = session;
-      _devices = devices;
-      _order = order;
-      _loading = false;
-    });
-    _updateTicker();
-    if (session != null) unawaited(_refreshBalance());
+    try {
+      final session = await _service.loadSession();
+      final devices = await _service.loadDevices();
+      final order = await _service.loadActiveOrder();
+      if (!mounted) return;
+      setState(() {
+        _session = session;
+        _devices = devices;
+        _order = order;
+        _loading = false;
+      });
+      _updateTicker();
+      if (session != null) unawaited(_refreshBalance());
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _loading = false;
+        _status = '本地安全存储读取失败：$error';
+      });
+    }
   }
 
   void _updateTicker() {
@@ -251,34 +259,63 @@ class _ShowerScreenState extends State<ShowerScreen> {
         setState(() => _status = '没有找到设备，请靠近水表并确认蓝牙已开启');
         return;
       }
+      setState(() => _status = '发现 ${candidates.length} 台设备，正在查询位置…');
+      final resolvedCandidates = await _service.resolveNearby(
+        session,
+        candidates,
+      );
+      if (!mounted) return;
       final selected = await showModalBottomSheet<QuzhiDevice>(
         context: context,
         showDragHandle: true,
+        isScrollControlled: true,
         builder: (context) => SafeArea(
-          child: ListView(
-            shrinkWrap: true,
-            children: [
-              const ListTile(title: Text('选择附近设备')),
-              for (final item in candidates)
-                ListTile(
-                  leading: const Icon(Icons.bluetooth_rounded),
-                  title: Text(item.name),
-                  subtitle: Text('${item.snCode} · 信号 ${item.rssi} dBm'),
-                  onTap: () => Navigator.pop(context, item),
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              maxHeight: MediaQuery.sizeOf(context).height * .72,
+            ),
+            child: ListView(
+              shrinkWrap: true,
+              children: [
+                const ListTile(
+                  title: Text('选择附近设备'),
+                  subtitle: Text('请核对水表上印刷的设备编号；信号强弱只能辅助判断距离。'),
                 ),
-            ],
+                for (var index = 0; index < resolvedCandidates.length; index++)
+                  ListTile(
+                    leading: CircleAvatar(child: Text('${index + 1}')),
+                    title: Text(
+                      resolvedCandidates[index].location.isNotEmpty
+                          ? resolvedCandidates[index].location
+                          : (resolvedCandidates[index].projectName.isNotEmpty
+                                ? resolvedCandidates[index].projectName
+                                : '位置未识别'),
+                    ),
+                    subtitle: Text(
+                      '${resolvedCandidates[index].name}\n'
+                      '设备编号 ${resolvedCandidates[index].identifier} · '
+                      '${_signalLabel(resolvedCandidates[index].rssi)} '
+                      '${resolvedCandidates[index].rssi} dBm',
+                    ),
+                    isThreeLine: true,
+                    trailing: index == 0
+                        ? const Chip(label: Text('信号最强'))
+                        : null,
+                    onTap: () =>
+                        Navigator.pop(context, resolvedCandidates[index]),
+                  ),
+              ],
+            ),
           ),
         ),
       );
       if (selected == null) return;
-      setState(() => _status = '正在核对设备信息…');
-      final resolved = await _service.resolveDevice(session, selected);
-      await _service.saveDevice(resolved);
+      await _service.saveDevice(selected);
       _devices = await _service.loadDevices();
       if (mounted) {
         setState(
           () => _status =
-              '已添加 ${resolved.location.isEmpty ? resolved.name : resolved.location}',
+              '已添加 ${selected.location.isEmpty ? selected.identifier : selected.location}',
         );
       }
     } catch (error) {
@@ -417,6 +454,12 @@ class _ShowerScreenState extends State<ShowerScreen> {
     final minutes = duration.inMinutes.toString().padLeft(2, '0');
     final seconds = (duration.inSeconds % 60).toString().padLeft(2, '0');
     return '$minutes:$seconds';
+  }
+
+  String _signalLabel(int rssi) {
+    if (rssi >= -65) return '很近';
+    if (rssi >= -78) return '较近';
+    return '较远';
   }
 }
 

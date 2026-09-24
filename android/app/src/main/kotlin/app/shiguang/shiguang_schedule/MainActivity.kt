@@ -154,6 +154,8 @@ class MainActivity : FlutterActivity() {
                 } else {
                     normalized.replace(":", "")
                 }
+                val previousRssi = devices[normalized]?.get("rssi") as? Int
+                if (previousRssi != null && previousRssi >= scanResult.rssi) return
                 devices[normalized] = mapOf(
                     "name" to name,
                     "address" to normalized,

@@ -38,6 +38,20 @@ void main() {
     expect(courses.single.source, 'wzu');
   });
 
+  test('normalizes imported location labels without losing the room', () {
+    final courses = ZhengfangParser.parsePortalItems([
+      {
+        'name': '大学英语',
+        'day': 4,
+        'startSection': 3,
+        'sectionCount': 2,
+        'weeksText': '1-16周',
+        'location': '📍 上课地点：南校区南9-B302 教师：徐老师',
+      },
+    ]);
+    expect(courses.single.location, '南校区南9-B302');
+  });
+
   test('does not invent weekday or section for ambiguous imports', () {
     final courses = ZhengfangParser.parsePortalItems([
       {'name': '无法定位的课程', 'text': '无法定位的课程\n教师：张老师\n1-16周'},
