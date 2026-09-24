@@ -16,9 +16,14 @@ class WzuSyncResult {
 }
 
 class WzuSyncScreen extends StatefulWidget {
-  const WzuSyncScreen({super.key, required this.initialWeek});
+  const WzuSyncScreen({
+    super.key,
+    required this.initialWeek,
+    this.totalWeeks = 20,
+  });
 
   final int initialWeek;
+  final int totalWeeks;
 
   @override
   State<WzuSyncScreen> createState() => _WzuSyncScreenState();
@@ -132,7 +137,7 @@ class _WzuSyncScreenState extends State<WzuSyncScreen> {
   }
 
   Future<void> _previewImport(List<Course> courses) async {
-    var currentWeek = widget.initialWeek.clamp(1, 25);
+    var currentWeek = widget.initialWeek.clamp(1, widget.totalWeeks);
     final confirmedWeek = await showModalBottomSheet<int>(
       context: context,
       isScrollControlled: true,
@@ -192,7 +197,7 @@ class _WzuSyncScreenState extends State<WzuSyncScreen> {
                             '周${'一二三四五六日'[course.weekday - 1]} '
                             '第${course.startSection}-${course.endSection}节'
                             ' · ${Course.formatWeeks(course.weeks)}'
-                            '${course.location.isEmpty ? '' : '\n${course.location}'}',
+                            '\n地点：${course.location.isEmpty ? '未提供' : course.location}',
                           ),
                         );
                       },
@@ -205,7 +210,7 @@ class _WzuSyncScreenState extends State<WzuSyncScreen> {
                       DropdownButton<int>(
                         value: currentWeek,
                         items: [
-                          for (var week = 1; week <= 25; week++)
+                          for (var week = 1; week <= widget.totalWeeks; week++)
                             DropdownMenuItem(
                               value: week,
                               child: Text('第 $week 周'),

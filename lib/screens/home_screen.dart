@@ -10,6 +10,7 @@ import '../models/homework.dart';
 import '../models/quick_link.dart';
 import '../services/notification_service.dart';
 import '../services/weread_service.dart';
+import '../services/external_app_service.dart';
 import '../widgets/schedule_grid.dart';
 import 'course_editor_screen.dart';
 import 'browser_screen.dart';
@@ -19,6 +20,8 @@ import 'project_screen.dart';
 import 'settings_screen.dart';
 import 'wzu_sync_screen.dart';
 import 'weread_screen.dart';
+import 'activity_timeline_screen.dart';
+import 'academic_status_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key, required this.store});
@@ -144,7 +147,10 @@ class _HomeScreenState extends State<HomeScreen> {
     final result = await Navigator.of(context).push<WzuSyncResult>(
       MaterialPageRoute(
         builder: (_) => WzuSyncScreen(
-          initialWeek: store.weekFor(DateTime.now()).clamp(1, 25),
+          initialWeek: store
+              .weekFor(DateTime.now())
+              .clamp(1, store.semesterWeeks),
+          totalWeeks: store.semesterWeeks,
         ),
       ),
     );
@@ -185,7 +191,9 @@ class _HomeScreenState extends State<HomeScreen> {
       MaterialPageRoute(
         builder: (_) => CourseEditorScreen(
           course: course,
-          currentWeek: store.weekFor(DateTime.now()).clamp(1, 25),
+          currentWeek: store
+              .weekFor(DateTime.now())
+              .clamp(1, store.semesterWeeks),
           initialWeekday: weekday,
           initialStartSection: startSection,
           initialWeeks: onlyWeek == null ? null : '$onlyWeek周',
@@ -292,7 +300,8 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _showCourse(Course course, {int? week}) async {
-    final targetWeek = week ?? store.weekFor(DateTime.now()).clamp(1, 25);
+    final targetWeek =
+        week ?? store.weekFor(DateTime.now()).clamp(1, store.semesterWeeks);
     final cancelledThisWeek = course.cancelledWeeks.contains(targetWeek);
     final action = await showModalBottomSheet<String>(
       context: context,
@@ -338,11 +347,10 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
               if (course.teacher.isNotEmpty)
                 _DetailLine(icon: Icons.person_outline, text: course.teacher),
-              if (course.location.isNotEmpty)
-                _DetailLine(
-                  icon: Icons.location_on_outlined,
-                  text: course.location,
-                ),
+              _DetailLine(
+                icon: Icons.location_on_outlined,
+                text: course.location.isEmpty ? '未提供上课地点' : course.location,
+              ),
               const SizedBox(height: 18),
               SizedBox(
                 width: double.infinity,
@@ -654,12 +662,15 @@ class _SchedulePageState extends State<_SchedulePage> {
   @override
   void initState() {
     super.initState();
-    _week = widget.store.weekFor(DateTime.now()).clamp(1, 25);
+    _week = widget.store
+        .weekFor(DateTime.now())
+        .clamp(1, widget.store.semesterWeeks);
   }
 
   @override
   Widget build(BuildContext context) {
     final store = widget.store;
+    _week = _week.clamp(1, store.semesterWeeks);
     final monday = store.dateFor(_week, 1);
     final sunday = store.dateFor(_week, 7);
     return Column(
@@ -688,7 +699,9 @@ class _SchedulePageState extends State<_SchedulePage> {
                           ],
                         ),
                         Text(
-                          '${monday.month}月${monday.day}日 – ${sunday.month}月${sunday.day}日',
+                          '${store.activeSemester.name} · ${monday.month}月${monday.day}日 – ${sunday.month}月${sunday.day}日',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                         ),
                       ],
                     ),
@@ -702,7 +715,9 @@ class _SchedulePageState extends State<_SchedulePage> {
               ),
               IconButton(
                 tooltip: '下一周',
-                onPressed: _week < 25 ? () => setState(() => _week++) : null,
+                onPressed: _week < store.semesterWeeks
+                    ? () => setState(() => _week++)
+                    : null,
                 icon: const Icon(Icons.chevron_right_rounded),
               ),
               IconButton(
@@ -771,7 +786,7 @@ class _SchedulePageState extends State<_SchedulePage> {
               return GestureDetector(
                 onHorizontalDragEnd: (details) {
                   final velocity = details.primaryVelocity ?? 0;
-                  if (velocity < -300 && _week < 25) {
+                  if (velocity < -300 && _week < store.semesterWeeks) {
                     setState(() => _week++);
                   } else if (velocity > 300 && _week > 1) {
                     setState(() => _week--);
@@ -808,7 +823,7 @@ class _SchedulePageState extends State<_SchedulePage> {
             mainAxisSpacing: 8,
             crossAxisSpacing: 8,
           ),
-          itemCount: 25,
+          itemCount: widget.store.semesterWeeks,
           itemBuilder: (context, index) {
             final week = index + 1;
             return InkWell(
@@ -1116,6 +1131,64 @@ class _ProfilePage extends StatelessWidget {
                     MaterialPageRoute<void>(
                       builder: (_) => const ReadingStatsScreen(),
                     ),
+                  ),
+                ),
+              ],
+              if (store.timelineEnabled) ...[
+                const SizedBox(height: 10),
+                Card(
+                  clipBehavior: Clip.antiAlias,
+                  child: ListTile(
+                    leading: const Icon(Icons.history_rounded),
+                    title: const Text('操作时间线'),
+                    subtitle: Text(
+                      store.activity.isEmpty
+                          ? '还没有记录'
+                          : '最近：${store.activity.first.title}',
+                    ),
+                    trailing: const Icon(Icons.chevron_right_rounded),
+                    onTap: () => Navigator.of(context).push(
+                      MaterialPageRoute<void>(
+                        builder: (_) => ActivityTimelineScreen(store: store),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+              if (store.academicEnabled) ...[
+                const SizedBox(height: 10),
+                Card(
+                  clipBehavior: Clip.antiAlias,
+                  child: ListTile(
+                    leading: const Icon(Icons.account_tree_outlined),
+                    title: const Text('学生学业情况'),
+                    subtitle: const Text('登录教务系统后读取完整学业信息'),
+                    trailing: const Icon(Icons.chevron_right_rounded),
+                    onTap: () => Navigator.of(context).push(
+                      MaterialPageRoute<void>(
+                        builder: (_) => const AcademicStatusScreen(),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+              if (store.showerEnabled) ...[
+                const SizedBox(height: 10),
+                Card(
+                  clipBehavior: Clip.antiAlias,
+                  child: ListTile(
+                    leading: const Icon(Icons.shower_outlined),
+                    title: const Text('打开洗澡'),
+                    subtitle: const Text('趣智轻享 quzhi-lite · 未安装时打开开源项目页'),
+                    trailing: const Icon(Icons.open_in_new_rounded),
+                    onTap: () async {
+                      final opened = await ExternalAppService.openQuzhiLite();
+                      if (!opened && context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('暂时无法打开趣智轻享或项目页面')),
+                        );
+                      }
+                    },
                   ),
                 ),
               ],

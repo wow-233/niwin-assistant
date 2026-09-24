@@ -31,15 +31,19 @@ Future<void> main() async {
 }
 
 Future<void> _startNotifications(ScheduleStore store) async {
-  await NotificationService.instance.initialize();
-  await NotificationService.instance.rescheduleAll(
-    enabled: store.notificationsEnabled,
-    homework: store.homework,
-    courses: store.courses,
-    semesterStart: store.semesterStart,
-    periods: store.periodTimes,
-    courseReminderMinutes: store.courseReminderMinutes,
-  );
+  try {
+    await NotificationService.instance.initialize();
+    await NotificationService.instance.rescheduleAll(
+      enabled: store.notificationsEnabled,
+      homework: store.homework,
+      courses: store.courses,
+      semesterStart: store.semesterStart,
+      periods: store.periodTimes,
+      courseReminderMinutes: store.courseReminderMinutes,
+    );
+  } catch (_) {
+    // Startup remains usable even when an OEM notification service fails.
+  }
 }
 
 class ShiguangApp extends StatelessWidget {

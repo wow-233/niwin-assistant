@@ -4,8 +4,10 @@ import '../data/schedule_store.dart';
 import '../services/backup_service.dart';
 import '../services/custom_font_service.dart';
 import '../services/notification_service.dart';
+import '../services/calendar_service.dart';
 import 'appearance_screen.dart';
 import 'period_settings_screen.dart';
+import 'semester_screen.dart';
 
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key, required this.store});
@@ -93,6 +95,20 @@ class SettingsScreen extends StatelessWidget {
             _SettingsCard(
               children: [
                 ListTile(
+                  leading: const Icon(Icons.school_outlined),
+                  title: const Text('学期管理'),
+                  subtitle: Text(
+                    '${store.activeSemester.name} · ${store.semesterWeeks} 周',
+                  ),
+                  trailing: const Icon(Icons.chevron_right_rounded),
+                  onTap: () => Navigator.of(context).push(
+                    MaterialPageRoute<void>(
+                      builder: (_) => SemesterScreen(store: store),
+                    ),
+                  ),
+                ),
+                const Divider(height: 1, indent: 56),
+                ListTile(
                   leading: const Icon(Icons.file_upload_outlined),
                   title: const Text('导出本地备份'),
                   subtitle: const Text('课程、作业、作息与学期日期 JSON'),
@@ -133,7 +149,7 @@ class SettingsScreen extends StatelessWidget {
                 const Divider(height: 1, indent: 56),
                 ListTile(
                   leading: const Icon(Icons.flag_outlined),
-                  title: const Text('学期第一周'),
+                  title: const Text('当前学期第一周'),
                   subtitle: Text(_dateLabel(store.semesterStart)),
                   trailing: const Icon(Icons.chevron_right_rounded),
                   onTap: () => _pickSemesterStart(context),
@@ -190,14 +206,22 @@ class SettingsScreen extends StatelessWidget {
                     ),
                   ),
                 ),
+                const Divider(height: 1, indent: 56),
+                ListTile(
+                  leading: const Icon(Icons.event_available_outlined),
+                  title: const Text('写入系统日历'),
+                  subtitle: const Text('仅写入当前学期课程，包含地点与课前提醒'),
+                  trailing: const Icon(Icons.chevron_right_rounded),
+                  onTap: () => _exportCalendar(context),
+                ),
                 if (store.notificationsEnabled) ...[
                   const Divider(height: 1, indent: 56),
                   ListTile(
                     leading: const Icon(Icons.notifications_active_outlined),
-                    title: const Text('发送测试通知'),
-                    subtitle: const Text('立即检查 Android 通知是否可用'),
+                    title: const Text('检查并重建提醒'),
+                    subtitle: const Text('发送测试通知并重新登记未来提醒'),
                     trailing: const Icon(Icons.send_outlined),
-                    onTap: NotificationService.instance.showTestNotification,
+                    onTap: () => _testAndReschedule(context),
                   ),
                 ],
               ],
@@ -400,6 +424,85 @@ class SettingsScreen extends StatelessWidget {
       }
     }
     await store.setNotificationsEnabled(value);
+    if (value) {
+      final result = await store.rescheduleNotifications();
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            '已登记 ${result.total} 个提醒${result.exact ? ' · 精确模式' : ' · 省电模式'}',
+          ),
+        ),
+      );
+    }
+  }
+
+  Future<void> _testAndReschedule(BuildContext context) async {
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      await NotificationService.instance.showTestNotification();
+      final result = await store.rescheduleNotifications();
+      if (!context.mounted) return;
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(
+            result.error == null
+                ? '提醒正常：课程 ${result.scheduledCourses} 个，待办 ${result.scheduledHomework} 个 · ${result.exact ? '精确模式' : '省电模式'}'
+                : '已登记 ${result.total} 个，部分失败：${result.error}',
+          ),
+        ),
+      );
+    } catch (error) {
+      if (context.mounted) {
+        messenger.showSnackBar(SnackBar(content: Text('提醒检查失败：$error')));
+      }
+    }
+  }
+
+  Future<void> _exportCalendar(BuildContext context) async {
+    if (store.courses.isEmpty) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('当前学期没有课程')));
+      return;
+    }
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('写入系统日历？'),
+        content: Text(
+          '将替换此前由泥win助手写入的课程事件，并写入“${store.activeSemester.name}”的有效课程。不会写入作业。',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('写入'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    try {
+      final result = await CalendarService.exportCourses(
+        courses: store.courses,
+        semesterStart: store.semesterStart,
+        periods: store.periodTimes,
+        reminderMinutes: store.courseReminderMinutes,
+      );
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('已向“${result.calendarName}”写入 ${result.count} 节课程'),
+        ),
+      );
+    } catch (error) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('写入日历失败：$error')));
+    }
   }
 
   Future<void> _confirmClear(BuildContext context) async {

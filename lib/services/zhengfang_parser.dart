@@ -41,7 +41,11 @@ class ZhengfangParser {
         RegExp(r'(?:教师|老师|主讲)\s*[:：]?\s*(.+)'),
       );
       final location = _field(
-        item['location']?.toString(),
+        _firstNonEmpty([
+          item['location']?.toString(),
+          item['cdmc']?.toString(),
+          item['jxdd']?.toString(),
+        ]),
         lines,
         RegExp(r'(?:上课地点|地点|教室)\s*[:：]?\s*(.+)'),
       );

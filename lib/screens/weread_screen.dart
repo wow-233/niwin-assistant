@@ -82,6 +82,30 @@ class _ExperimentalScreenState extends State<ExperimentalScreen> {
               child: Column(
                 children: [
                   SwitchListTile(
+                    secondary: const Icon(Icons.history_rounded),
+                    title: const Text('操作时间线'),
+                    subtitle: const Text('开启后记录课程添加、修改、导入和学期切换'),
+                    value: widget.store.timelineEnabled,
+                    onChanged: widget.store.setTimelineEnabled,
+                  ),
+                  const Divider(height: 1, indent: 56),
+                  SwitchListTile(
+                    secondary: const Icon(Icons.account_tree_outlined),
+                    title: const Text('学生学业情况'),
+                    subtitle: const Text('登录教务系统后读取并整理为树状卡片'),
+                    value: widget.store.academicEnabled,
+                    onChanged: widget.store.setAcademicEnabled,
+                  ),
+                  const Divider(height: 1, indent: 56),
+                  SwitchListTile(
+                    secondary: const Icon(Icons.shower_outlined),
+                    title: const Text('趣智轻享洗澡快捷入口'),
+                    subtitle: const Text('在“我的”一键打开 quzhi-lite；未安装时打开项目页'),
+                    value: widget.store.showerEnabled,
+                    onChanged: widget.store.setShowerEnabled,
+                  ),
+                  const Divider(height: 1, indent: 56),
+                  SwitchListTile(
                     secondary: const Icon(Icons.auto_stories_outlined),
                     title: const Text('微信读书统计'),
                     subtitle: const Text('在“我的”显示本月阅读天数与时长'),
@@ -120,7 +144,7 @@ class _ExperimentalScreenState extends State<ExperimentalScreen> {
             const SizedBox(height: 12),
             const Padding(
               padding: EdgeInsets.symmetric(horizontal: 8),
-              child: Text('统计默认缓存 6 小时；只有手动刷新或缓存过期才请求接口，减少等待和频率占用。'),
+              child: Text('实验功能默认关闭；开启后才会在“我的”显示入口。微信读书统计默认缓存 6 小时。'),
             ),
           ],
         ),

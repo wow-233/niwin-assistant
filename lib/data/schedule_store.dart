@@ -10,6 +10,8 @@ import '../models/countdown_item.dart';
 import '../models/homework.dart';
 import '../models/period_time.dart';
 import '../models/quick_link.dart';
+import '../models/activity_entry.dart';
+import '../models/semester.dart';
 import '../services/notification_service.dart';
 
 class ScheduleStore extends ChangeNotifier {
@@ -51,6 +53,12 @@ class ScheduleStore extends ChangeNotifier {
   static const _quickLinksKey = 'quickLinks.v1';
   static const _wereadEnabledKey = 'wereadEnabled.v1';
   static const _countdownsKey = 'countdowns.v1';
+  static const _semestersKey = 'semesters.v2';
+  static const _activeSemesterKey = 'activeSemester.v2';
+  static const _timelineEnabledKey = 'timelineEnabled.v1';
+  static const _academicEnabledKey = 'academicEnabled.v1';
+  static const _showerEnabledKey = 'showerEnabled.v1';
+  static const _activityKey = 'activityTimeline.v1';
 
   final SharedPreferences _preferences;
   final ValueNotifier<int> themeRevision = ValueNotifier<int>(0);
@@ -58,12 +66,18 @@ class ScheduleStore extends ChangeNotifier {
   final List<Homework> _homework = [];
   final List<QuickLink> _quickLinks = [];
   final List<CountdownItem> _countdowns = [];
+  final List<Semester> _semesters = [];
+  final List<ActivityEntry> _activity = [];
 
   List<Course> get courses => List.unmodifiable(_courses);
   List<Homework> get homework => List.unmodifiable(_homework);
   List<QuickLink> get quickLinks => List.unmodifiable(_quickLinks);
   List<CountdownItem> get countdowns => List.unmodifiable(_countdowns);
+  List<Semester> get semesters => List.unmodifiable(_semesters);
+  List<ActivityEntry> get activity => List.unmodifiable(_activity);
   late DateTime semesterStart;
+  late String activeSemesterId;
+  int semesterWeeks = 20;
   bool showWeekends = true;
   bool glassEffect = true;
   bool notificationsEnabled = false;
@@ -89,6 +103,9 @@ class ScheduleStore extends ChangeNotifier {
   bool fitScheduleToScreen = true;
   bool isLoaded = false;
   bool wereadEnabled = false;
+  bool timelineEnabled = false;
+  bool academicEnabled = false;
+  bool showerEnabled = false;
   Timer? _notificationSyncTimer;
 
   Future<void> load() async {
@@ -129,6 +146,9 @@ class ScheduleStore extends ChangeNotifier {
     startupTab = (_preferences.getInt(_startupTabKey) ?? 1).clamp(0, 1);
     fitScheduleToScreen = _preferences.getBool(_fitScheduleKey) ?? true;
     wereadEnabled = _preferences.getBool(_wereadEnabledKey) ?? false;
+    timelineEnabled = _preferences.getBool(_timelineEnabledKey) ?? false;
+    academicEnabled = _preferences.getBool(_academicEnabledKey) ?? false;
+    showerEnabled = _preferences.getBool(_showerEnabledKey) ?? false;
     final rawPeriods = _preferences.getString(_periodTimesKey);
     if (rawPeriods != null) {
       try {
@@ -155,6 +175,64 @@ class ScheduleStore extends ChangeNotifier {
           );
       } on FormatException {
         // Keep the app usable if an old/corrupt local payload is encountered.
+      }
+    }
+    final rawSemesters = _preferences.getString(_semestersKey);
+    if (rawSemesters != null) {
+      try {
+        final decoded = jsonDecode(rawSemesters) as List<dynamic>;
+        _semesters
+          ..clear()
+          ..addAll(
+            decoded.map(
+              (item) =>
+                  Semester.fromJson(Map<String, dynamic>.from(item as Map)),
+            ),
+          );
+      } catch (_) {
+        _semesters.clear();
+      }
+    }
+    if (_semesters.isEmpty) {
+      activeSemesterId = 'semester-${semesterStart.millisecondsSinceEpoch}';
+      _semesters.add(
+        Semester(
+          id: activeSemesterId,
+          name: _suggestSemesterName(semesterStart),
+          startDate: semesterStart,
+          totalWeeks: 20,
+          courses: List.of(_courses),
+        ),
+      );
+      await _persistSemesters();
+    } else {
+      final requested = _preferences.getString(_activeSemesterKey);
+      final selected = _semesters.firstWhere(
+        (item) => item.id == requested,
+        orElse: () => _semesters.first,
+      );
+      activeSemesterId = selected.id;
+      semesterStart = selected.startDate;
+      semesterWeeks = selected.totalWeeks;
+      _courses
+        ..clear()
+        ..addAll(selected.courses);
+    }
+    final rawActivity = _preferences.getString(_activityKey);
+    if (rawActivity != null) {
+      try {
+        final decoded = jsonDecode(rawActivity) as List<dynamic>;
+        _activity
+          ..clear()
+          ..addAll(
+            decoded.map(
+              (item) => ActivityEntry.fromJson(
+                Map<String, dynamic>.from(item as Map),
+              ),
+            ),
+          );
+      } catch (_) {
+        _activity.clear();
       }
     }
     final rawHomework = _preferences.getString(_homeworkKey);
@@ -299,13 +377,20 @@ class ScheduleStore extends ChangeNotifier {
       _courses[index] = course;
     }
     await _persistCourses();
+    await _recordActivity(
+      index == -1 ? '添加课程' : '修改课程',
+      '${course.name} · 周${'一二三四五六日'[course.weekday - 1]} 第${course.startSection}-${course.endSection}节',
+      'course',
+    );
     _scheduleNotificationSync();
     notifyListeners();
   }
 
   Future<void> deleteCourse(String id) async {
+    final name = _courses.where((course) => course.id == id).firstOrNull?.name;
     _courses.removeWhere((course) => course.id == id);
     await _persistCourses();
+    if (name != null) await _recordActivity('删除课程', name, 'delete');
     _scheduleNotificationSync();
     notifyListeners();
   }
@@ -316,6 +401,11 @@ class ScheduleStore extends ChangeNotifier {
     final cancelled = {..._courses[index].cancelledWeeks, week};
     _courses[index] = _courses[index].copyWith(cancelledWeeks: cancelled);
     await _persistCourses();
+    await _recordActivity(
+      '本周停课',
+      '${_courses[index].name} · 第$week周',
+      'cancel',
+    );
     _scheduleNotificationSync();
     notifyListeners();
   }
@@ -326,6 +416,11 @@ class ScheduleStore extends ChangeNotifier {
     final cancelled = {..._courses[index].cancelledWeeks}..remove(week);
     _courses[index] = _courses[index].copyWith(cancelledWeeks: cancelled);
     await _persistCourses();
+    await _recordActivity(
+      '恢复课程',
+      '${_courses[index].name} · 第$week周',
+      'restore',
+    );
     _scheduleNotificationSync();
     notifyListeners();
   }
@@ -334,6 +429,7 @@ class ScheduleStore extends ChangeNotifier {
     _courses.removeWhere((course) => course.source == 'wzu');
     _courses.addAll(imported);
     await _persistCourses();
+    await _recordActivity('导入课表', '成功导入 ${imported.length} 门课程', 'sync');
     _scheduleNotificationSync();
     notifyListeners();
   }
@@ -355,6 +451,115 @@ class ScheduleStore extends ChangeNotifier {
       _semesterStartKey,
       semesterStart.toIso8601String(),
     );
+    _upsertActiveSemester();
+    await _persistSemesters();
+    _scheduleNotificationSync();
+    notifyListeners();
+  }
+
+  Semester get activeSemester => _semesters.firstWhere(
+    (item) => item.id == activeSemesterId,
+    orElse: () => _semesters.first,
+  );
+
+  Future<void> createSemester({
+    required String name,
+    required DateTime startDate,
+    required int totalWeeks,
+  }) async {
+    final monday = DateTime(
+      startDate.year,
+      startDate.month,
+      startDate.day,
+    ).subtract(Duration(days: startDate.weekday - 1));
+    final semester = Semester(
+      id: 'semester-${DateTime.now().microsecondsSinceEpoch}',
+      name: name.trim().isEmpty ? _suggestSemesterName(monday) : name.trim(),
+      startDate: monday,
+      totalWeeks: totalWeeks.clamp(1, 30),
+      courses: const [],
+    );
+    _upsertActiveSemester();
+    _semesters.add(semester);
+    await _switchSemesterData(semester);
+    await _recordActivity('新建学期', semester.name, 'semester');
+  }
+
+  Future<void> updateActiveSemester({
+    required String name,
+    required DateTime startDate,
+    required int totalWeeks,
+  }) async {
+    semesterStart = DateTime(
+      startDate.year,
+      startDate.month,
+      startDate.day,
+    ).subtract(Duration(days: startDate.weekday - 1));
+    semesterWeeks = totalWeeks.clamp(1, 30);
+    final index = _semesters.indexWhere((item) => item.id == activeSemesterId);
+    if (index >= 0) {
+      _semesters[index] = _semesters[index].copyWith(
+        name: name.trim().isEmpty
+            ? _suggestSemesterName(semesterStart)
+            : name.trim(),
+        startDate: semesterStart,
+        totalWeeks: semesterWeeks,
+        courses: List.of(_courses),
+      );
+    }
+    await Future.wait([
+      _preferences.setString(
+        _semesterStartKey,
+        semesterStart.toIso8601String(),
+      ),
+      _persistSemesters(),
+    ]);
+    _scheduleNotificationSync();
+    notifyListeners();
+  }
+
+  Future<void> switchSemester(String id) async {
+    if (id == activeSemesterId) return;
+    _upsertActiveSemester();
+    final target = _semesters.where((item) => item.id == id).firstOrNull;
+    if (target == null) return;
+    await _switchSemesterData(target);
+    await _recordActivity('切换学期', target.name, 'semester');
+  }
+
+  Future<void> deleteSemester(String id) async {
+    if (_semesters.length <= 1) return;
+    final target = _semesters.where((item) => item.id == id).firstOrNull;
+    if (target == null) return;
+    _semesters.removeWhere((item) => item.id == id);
+    if (id == activeSemesterId) {
+      await _switchSemesterData(_semesters.first);
+    } else {
+      await _persistSemesters();
+      notifyListeners();
+    }
+    await _recordActivity('删除学期', target.name, 'delete');
+  }
+
+  Future<void> _switchSemesterData(Semester semester) async {
+    activeSemesterId = semester.id;
+    semesterStart = semester.startDate;
+    semesterWeeks = semester.totalWeeks;
+    _courses
+      ..clear()
+      ..addAll(semester.courses);
+    await Future.wait([
+      _preferences.setString(_activeSemesterKey, activeSemesterId),
+      _preferences.setString(
+        _semesterStartKey,
+        semesterStart.toIso8601String(),
+      ),
+      _preferences.setString(
+        _coursesKey,
+        jsonEncode(_courses.map((course) => course.toJson()).toList()),
+      ),
+      _persistSemesters(),
+    ]);
     _scheduleNotificationSync();
     notifyListeners();
   }
@@ -501,6 +706,33 @@ class ScheduleStore extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<void> setTimelineEnabled(bool value) async {
+    timelineEnabled = value;
+    await _preferences.setBool(_timelineEnabledKey, value);
+    if (value) {
+      await _recordActivity('启用时间线', '开始记录应用内的重要操作', 'history');
+    }
+    notifyListeners();
+  }
+
+  Future<void> setAcademicEnabled(bool value) async {
+    academicEnabled = value;
+    await _preferences.setBool(_academicEnabledKey, value);
+    notifyListeners();
+  }
+
+  Future<void> setShowerEnabled(bool value) async {
+    showerEnabled = value;
+    await _preferences.setBool(_showerEnabledKey, value);
+    notifyListeners();
+  }
+
+  Future<void> clearActivity() async {
+    _activity.clear();
+    await _preferences.remove(_activityKey);
+    notifyListeners();
+  }
+
   Future<void> saveQuickLink(QuickLink link) async {
     final index = _quickLinks.indexWhere((item) => item.id == link.id);
     if (index == -1) {
@@ -543,15 +775,18 @@ class ScheduleStore extends ChangeNotifier {
   }
 
   String exportBackupJson() {
+    _upsertActiveSemester();
     return const JsonEncoder.withIndent('  ').convert({
       'format': 'niwin-backup',
-      'version': 1,
+      'version': 2,
       'exportedAt': DateTime.now().toIso8601String(),
       'semesterStart': semesterStart.toIso8601String(),
       'courses': _courses.map((item) => item.toJson()).toList(),
       'homework': _homework.map((item) => item.toJson()).toList(),
       'periodTimes': periodTimes.map((item) => item.toJson()).toList(),
       'countdowns': _countdowns.map((item) => item.toJson()).toList(),
+      'activeSemesterId': activeSemesterId,
+      'semesters': _semesters.map((item) => item.toJson()).toList(),
     });
   }
 
@@ -595,6 +830,27 @@ class ScheduleStore extends ChangeNotifier {
       ..addAll(countdowns);
     periodTimes = periods;
     semesterStart = start;
+    final importedSemesters = (map['semesters'] as List<dynamic>? ?? const [])
+        .map(
+          (item) => Semester.fromJson(Map<String, dynamic>.from(item as Map)),
+        )
+        .toList();
+    if (importedSemesters.isNotEmpty) {
+      _semesters
+        ..clear()
+        ..addAll(importedSemesters);
+      final requested = map['activeSemesterId']?.toString();
+      final selected = _semesters.firstWhere(
+        (item) => item.id == requested,
+        orElse: () => _semesters.first,
+      );
+      activeSemesterId = selected.id;
+      semesterStart = selected.startDate;
+      semesterWeeks = selected.totalWeeks;
+      _courses
+        ..clear()
+        ..addAll(selected.courses);
+    }
     await Future.wait([
       _persistCourses(),
       _persistHomework(),
@@ -679,10 +935,71 @@ class ScheduleStore extends ChangeNotifier {
   }
 
   Future<void> _persistCourses() {
-    return _preferences.setString(
-      _coursesKey,
-      jsonEncode(_courses.map((course) => course.toJson()).toList()),
+    _upsertActiveSemester();
+    return Future.wait([
+      _preferences.setString(
+        _coursesKey,
+        jsonEncode(_courses.map((course) => course.toJson()).toList()),
+      ),
+      _persistSemesters(),
+    ]).then((_) {});
+  }
+
+  void _upsertActiveSemester() {
+    if (_semesters.isEmpty) return;
+    final index = _semesters.indexWhere((item) => item.id == activeSemesterId);
+    final snapshot = Semester(
+      id: activeSemesterId,
+      name: index >= 0
+          ? _semesters[index].name
+          : _suggestSemesterName(semesterStart),
+      startDate: semesterStart,
+      totalWeeks: semesterWeeks,
+      courses: List.of(_courses),
     );
+    if (index >= 0) {
+      _semesters[index] = snapshot;
+    } else {
+      _semesters.add(snapshot);
+    }
+  }
+
+  Future<void> _persistSemesters() {
+    return Future.wait([
+      _preferences.setString(
+        _semestersKey,
+        jsonEncode(_semesters.map((item) => item.toJson()).toList()),
+      ),
+      _preferences.setString(_activeSemesterKey, activeSemesterId),
+    ]).then((_) {});
+  }
+
+  Future<void> _recordActivity(String title, String detail, String icon) async {
+    if (!timelineEnabled) return;
+    _activity.insert(
+      0,
+      ActivityEntry(
+        id: 'activity-${DateTime.now().microsecondsSinceEpoch}',
+        title: title,
+        detail: detail,
+        createdAt: DateTime.now(),
+        icon: icon,
+      ),
+    );
+    if (_activity.length > 200) {
+      _activity.removeRange(200, _activity.length);
+    }
+    await _preferences.setString(
+      _activityKey,
+      jsonEncode(_activity.map((item) => item.toJson()).toList()),
+    );
+  }
+
+  static String _suggestSemesterName(DateTime start) {
+    final autumn = start.month >= 7;
+    final endYear = autumn ? start.year + 1 : start.year;
+    final beginYear = autumn ? start.year : start.year - 1;
+    return '$beginYear-$endYear 学年${autumn ? '第一' : '第二'}学期';
   }
 
   Future<void> _persistHomework() {
@@ -706,7 +1023,7 @@ class ScheduleStore extends ChangeNotifier {
     );
   }
 
-  Future<void> _syncNotifications() {
+  Future<NotificationScheduleResult> _syncNotifications() {
     return NotificationService.instance.rescheduleAll(
       enabled: notificationsEnabled,
       homework: _homework,
@@ -717,10 +1034,17 @@ class ScheduleStore extends ChangeNotifier {
     );
   }
 
+  Future<NotificationScheduleResult> rescheduleNotifications() =>
+      _syncNotifications();
+
   void _scheduleNotificationSync() {
     _notificationSyncTimer?.cancel();
-    _notificationSyncTimer = Timer(const Duration(milliseconds: 350), () {
-      _syncNotifications();
+    _notificationSyncTimer = Timer(const Duration(milliseconds: 350), () async {
+      try {
+        await _syncNotifications();
+      } catch (_) {
+        // Notification failures must never take down the application isolate.
+      }
     });
   }
 

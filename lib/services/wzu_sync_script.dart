@@ -60,7 +60,7 @@ const wzuAssistantScript = r'''
       sectionsText: clean(course.jcs),
       weeksText: clean(course.zcd),
       teacher: clean(course.xm || course.jsxm),
-      location: clean(course.cdmc),
+      location: clean(course.cdmc || course.jxdd || course.jxcdmc || course.cd || ''),
       confidence: 'api'
     };
   };
