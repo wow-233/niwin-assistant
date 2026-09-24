@@ -6,6 +6,8 @@ import 'package:crypto/crypto.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
+const quzhiUserAgent = 'NiwinAssistant/1.5.1 Android/6.5.28';
+
 class QuzhiSession {
   const QuzhiSession({
     required this.loginCode,
@@ -446,10 +448,7 @@ class QuzhiService {
           .openUrl(method, uri)
           .timeout(const Duration(seconds: 15));
       request.headers.set(HttpHeaders.acceptHeader, 'application/json');
-      request.headers.set(
-        HttpHeaders.userAgentHeader,
-        'Android/$_version 泥win助手',
-      );
+      request.headers.set(HttpHeaders.userAgentHeader, quzhiUserAgent);
       if (session != null && session.projectId != 0) {
         request.headers.set('Config-Project', '${session.projectId}');
         request.headers.set(

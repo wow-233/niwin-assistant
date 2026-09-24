@@ -4,6 +4,8 @@ import 'dart:io';
 
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
+const webDavUserAgent = 'NiwinAssistant/1.5.1 WebDAV/1.0';
+
 class WebDavConfig {
   const WebDavConfig({
     required this.url,
@@ -75,7 +77,7 @@ class WebDavService {
         HttpHeaders.authorizationHeader,
         'Basic ${base64Encode(utf8.encode('${config.username}:${config.password}'))}',
       );
-      request.headers.set(HttpHeaders.userAgentHeader, '泥win助手 WebDAV/1.0');
+      request.headers.set(HttpHeaders.userAgentHeader, webDavUserAgent);
       if (body != null) {
         request.headers.contentType = ContentType.json;
         request.headers.contentLength = utf8.encode(body).length;
