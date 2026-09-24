@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../data/schedule_store.dart';
+import '../services/app_error_log_service.dart';
 import '../services/backup_service.dart';
 import '../services/custom_font_service.dart';
 import '../services/notification_service.dart';
@@ -231,6 +232,18 @@ class SettingsScreen extends StatelessWidget {
             _SettingsCard(
               children: [
                 ListTile(
+                  leading: const Icon(Icons.monitor_heart_outlined),
+                  title: const Text('稳定性诊断'),
+                  subtitle: Text(
+                    AppErrorLogService.lastError == null
+                        ? '未记录到 Dart 异常'
+                        : '已记录上次异常，点击查看',
+                  ),
+                  trailing: const Icon(Icons.chevron_right_rounded),
+                  onTap: () => _showStabilityDiagnostics(context),
+                ),
+                const Divider(height: 1, indent: 56),
+                ListTile(
                   leading: Icon(
                     Icons.delete_sweep_outlined,
                     color: Theme.of(context).colorScheme.error,
@@ -315,6 +328,34 @@ class SettingsScreen extends StatelessWidget {
       ),
     );
     if (value != null) await store.setThemeMode(value);
+  }
+
+  Future<void> _showStabilityDiagnostics(BuildContext context) async {
+    final report = AppErrorLogService.lastError;
+    final clear = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('稳定性诊断'),
+        content: SizedBox(
+          width: double.maxFinite,
+          child: SingleChildScrollView(
+            child: SelectableText(report ?? '未记录到 Dart 异常。'),
+          ),
+        ),
+        actions: [
+          if (report != null)
+            TextButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('清除记录'),
+            ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('关闭'),
+          ),
+        ],
+      ),
+    );
+    if (clear == true) await AppErrorLogService.clear();
   }
 
   Future<void> _showFontSheet(BuildContext context) async {

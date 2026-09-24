@@ -33,6 +33,7 @@ class ScheduleGrid extends StatelessWidget {
   });
 
   static const double timeWidth = 58;
+  static const double headerHeight = 52;
 
   final int week;
   final DateTime semesterStart;
@@ -56,7 +57,7 @@ class ScheduleGrid extends StatelessWidget {
       child: Column(
         children: [
           SizedBox(
-            height: 52,
+            height: headerHeight,
             child: LayoutBuilder(
               builder: (context, constraints) {
                 final dayWidth = (constraints.maxWidth - timeWidth) / dayCount;
@@ -98,26 +99,29 @@ class ScheduleGrid extends StatelessWidget {
                           children: [
                             SizedBox(
                               width: timeWidth,
-                              child: Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  Text(
-                                    '${row + 1}',
-                                    style: const TextStyle(
-                                      fontSize: 12,
-                                      height: 1,
-                                      fontWeight: FontWeight.w800,
+                              child: FittedBox(
+                                fit: BoxFit.scaleDown,
+                                child: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Text(
+                                      '${row + 1}',
+                                      style: const TextStyle(
+                                        fontSize: 12,
+                                        height: 1,
+                                        fontWeight: FontWeight.w800,
+                                      ),
                                     ),
-                                  ),
-                                  Text(
-                                    '${periods[row].start}\n${periods[row].end}',
-                                    textAlign: TextAlign.center,
-                                    style: const TextStyle(
-                                      fontSize: 7.5,
-                                      height: 1.05,
+                                    Text(
+                                      '${periods[row].start}\n${periods[row].end}',
+                                      textAlign: TextAlign.center,
+                                      style: const TextStyle(
+                                        fontSize: 7.5,
+                                        height: 1.05,
+                                      ),
                                     ),
-                                  ),
-                                ],
+                                  ],
+                                ),
                               ),
                             ),
                             for (var day = 0; day < dayCount; day++)
@@ -197,33 +201,36 @@ class _DayHeading extends StatelessWidget {
     final now = DateTime.now();
     final today =
         now.year == date.year && now.month == date.month && now.day == date.day;
-    return Column(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        Text(
-          names[weekday - 1],
-          style: Theme.of(context).textTheme.labelMedium?.copyWith(
-            color: today ? Theme.of(context).colorScheme.primary : null,
-            fontWeight: today ? FontWeight.w800 : FontWeight.w500,
-          ),
-        ),
-        const SizedBox(height: 2),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
-          decoration: BoxDecoration(
-            color: today
-                ? Theme.of(context).colorScheme.primary
-                : Colors.transparent,
-            borderRadius: BorderRadius.circular(10),
-          ),
-          child: Text(
-            '${date.month}/${date.day}',
-            style: Theme.of(context).textTheme.labelSmall?.copyWith(
-              color: today ? Theme.of(context).colorScheme.onPrimary : null,
+    return FittedBox(
+      fit: BoxFit.scaleDown,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            names[weekday - 1],
+            style: Theme.of(context).textTheme.labelMedium?.copyWith(
+              color: today ? Theme.of(context).colorScheme.primary : null,
+              fontWeight: today ? FontWeight.w800 : FontWeight.w500,
             ),
           ),
-        ),
-      ],
+          const SizedBox(height: 2),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+            decoration: BoxDecoration(
+              color: today
+                  ? Theme.of(context).colorScheme.primary
+                  : Colors.transparent,
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Text(
+              '${date.month}/${date.day}',
+              style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                color: today ? Theme.of(context).colorScheme.onPrimary : null,
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -301,40 +308,45 @@ class _CourseCard extends StatelessWidget {
                 child: Stack(
                   alignment: Alignment.center,
                   children: [
-                    Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          course.name,
-                          textAlign: TextAlign.center,
-                          maxLines: compact ? 2 : 4,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 10.5 * textScale,
-                            height: 1.12,
-                            fontWeight: FontWeight.w800,
-                            decoration: cancelled
-                                ? TextDecoration.lineThrough
-                                : null,
-                          ),
-                        ),
-                        if (showRoom) ...[
-                          const SizedBox(height: 2),
-                          Text(
-                            course.location,
-                            textAlign: TextAlign.center,
-                            maxLines: constraints.maxHeight >= 76 ? 2 : 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              color: Colors.white.withValues(alpha: .88),
-                              fontSize: 8.5 * textScale,
-                              height: 1.08,
+                    FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: SizedBox(
+                        width: constraints.maxWidth,
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              course.name,
+                              textAlign: TextAlign.center,
+                              maxLines: compact ? 2 : 4,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 10.5 * textScale,
+                                height: 1.12,
+                                fontWeight: FontWeight.w800,
+                                decoration: cancelled
+                                    ? TextDecoration.lineThrough
+                                    : null,
+                              ),
                             ),
-                          ),
-                        ],
-                      ],
+                            if (showRoom) ...[
+                              const SizedBox(height: 2),
+                              Text(
+                                course.location,
+                                textAlign: TextAlign.center,
+                                maxLines: constraints.maxHeight >= 76 ? 2 : 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  color: Colors.white.withValues(alpha: .88),
+                                  fontSize: 8.5 * textScale,
+                                  height: 1.08,
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
                     ),
                     if (statusBadge.isNotEmpty)
                       Positioned(

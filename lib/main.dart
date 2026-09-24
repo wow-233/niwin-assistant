@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:ui';
 
 import 'package:dynamic_color/dynamic_color.dart';
 import 'package:flutter/material.dart';
@@ -7,12 +8,21 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'data/schedule_store.dart';
 import 'screens/home_screen.dart';
+import 'services/app_error_log_service.dart';
 import 'services/custom_font_service.dart';
-import 'services/notification_service.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   final preferences = await SharedPreferences.getInstance();
+  AppErrorLogService.attach(preferences);
+  FlutterError.onError = (details) {
+    FlutterError.presentError(details);
+    unawaited(AppErrorLogService.record(details.exception, details.stack));
+  };
+  PlatformDispatcher.instance.onError = (error, stack) {
+    unawaited(AppErrorLogService.record(error, stack));
+    return true;
+  };
   final store = ScheduleStore(preferences);
   await store.load();
   await store.recordAppOpen();
@@ -27,23 +37,6 @@ Future<void> main() async {
     }
   }
   runApp(ShiguangApp(store: store));
-  unawaited(_startNotifications(store));
-}
-
-Future<void> _startNotifications(ScheduleStore store) async {
-  try {
-    await NotificationService.instance.initialize();
-    await NotificationService.instance.rescheduleAll(
-      enabled: store.notificationsEnabled,
-      homework: store.homework,
-      courses: store.courses,
-      semesterStart: store.semesterStart,
-      periods: store.periodTimes,
-      courseReminderMinutes: store.courseReminderMinutes,
-    );
-  } catch (_) {
-    // Startup remains usable even when an OEM notification service fails.
-  }
 }
 
 class ShiguangApp extends StatelessWidget {

@@ -81,4 +81,25 @@ void main() {
     expect(tester.takeException(), isNull);
     expect(find.text('删'), findsOneWidget);
   });
+
+  testWidgets(
+    'schedule page does not overflow on a short screen with large text',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(360, 640));
+      tester.platformDispatcher.textScaleFactorTestValue = 1.8;
+      addTearDown(() {
+        tester.binding.setSurfaceSize(null);
+        tester.platformDispatcher.clearTextScaleFactorTestValue();
+      });
+      SharedPreferences.setMockInitialValues({'startupTab': 1});
+      final store = ScheduleStore(await SharedPreferences.getInstance());
+      await store.load();
+
+      await tester.pumpWidget(ShiguangApp(store: store));
+      await tester.pumpAndSettle();
+
+      expect(find.text('课表'), findsWidgets);
+      expect(tester.takeException(), isNull);
+    },
+  );
 }

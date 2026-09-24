@@ -113,31 +113,34 @@ class _HomeScreenState extends State<HomeScreen> {
                   label: const Text('记作业'),
                 )
               : null,
-          bottomNavigationBar: NavigationBar(
-            selectedIndex: _index,
-            onDestinationSelected: (value) => setState(() => _index = value),
-            destinations: const [
-              NavigationDestination(
-                icon: Icon(Icons.view_agenda_outlined),
-                selectedIcon: Icon(Icons.view_agenda_rounded),
-                label: '今日',
-              ),
-              NavigationDestination(
-                icon: Icon(Icons.calendar_view_week_outlined),
-                selectedIcon: Icon(Icons.calendar_view_week_rounded),
-                label: '课表',
-              ),
-              NavigationDestination(
-                icon: Icon(Icons.task_alt_outlined),
-                selectedIcon: Icon(Icons.task_alt_rounded),
-                label: '作业',
-              ),
-              NavigationDestination(
-                icon: Icon(Icons.person_outline_rounded),
-                selectedIcon: Icon(Icons.person_rounded),
-                label: '我的',
-              ),
-            ],
+          bottomNavigationBar: MediaQuery.withClampedTextScaling(
+            maxScaleFactor: 1.1,
+            child: NavigationBar(
+              selectedIndex: _index,
+              onDestinationSelected: (value) => setState(() => _index = value),
+              destinations: const [
+                NavigationDestination(
+                  icon: Icon(Icons.view_agenda_outlined),
+                  selectedIcon: Icon(Icons.view_agenda_rounded),
+                  label: '今日',
+                ),
+                NavigationDestination(
+                  icon: Icon(Icons.calendar_view_week_outlined),
+                  selectedIcon: Icon(Icons.calendar_view_week_rounded),
+                  label: '课表',
+                ),
+                NavigationDestination(
+                  icon: Icon(Icons.task_alt_outlined),
+                  selectedIcon: Icon(Icons.task_alt_rounded),
+                  label: '作业',
+                ),
+                NavigationDestination(
+                  icon: Icon(Icons.person_outline_rounded),
+                  selectedIcon: Icon(Icons.person_rounded),
+                  label: '我的',
+                ),
+              ],
+            ),
           ),
         );
       },
@@ -674,139 +677,148 @@ class _SchedulePageState extends State<_SchedulePage> {
     _week = _week.clamp(1, store.semesterWeeks);
     final monday = store.dateFor(_week, 1);
     final sunday = store.dateFor(_week, 7);
-    return Column(
-      children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 18, 8, 10),
-          child: Row(
-            children: [
-              Expanded(
-                child: InkWell(
-                  onTap: _jumpToWeek,
-                  borderRadius: BorderRadius.circular(14),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 5),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            Text(
-                              '第 $_week 周',
-                              style: Theme.of(context).textTheme.headlineSmall
-                                  ?.copyWith(fontWeight: FontWeight.w800),
-                            ),
-                            const Icon(Icons.arrow_drop_down_rounded),
-                          ],
-                        ),
-                        Text(
-                          '${store.activeSemester.name} · ${monday.month}月${monday.day}日 – ${sunday.month}月${sunday.day}日',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ],
+    return MediaQuery.withClampedTextScaling(
+      maxScaleFactor: 1.1,
+      child: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 18, 8, 10),
+            child: Row(
+              children: [
+                Expanded(
+                  child: InkWell(
+                    onTap: _jumpToWeek,
+                    borderRadius: BorderRadius.circular(14),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 5),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  '第 $_week 周',
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .headlineSmall
+                                      ?.copyWith(fontWeight: FontWeight.w800),
+                                ),
+                              ),
+                              const Icon(Icons.arrow_drop_down_rounded),
+                            ],
+                          ),
+                          Text(
+                            '${store.activeSemester.name} · ${monday.month}月${monday.day}日 – ${sunday.month}月${sunday.day}日',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                 ),
-              ),
-              IconButton(
-                tooltip: '上一周',
-                onPressed: _week > 1 ? () => setState(() => _week--) : null,
-                icon: const Icon(Icons.chevron_left_rounded),
-              ),
-              IconButton(
-                tooltip: '下一周',
-                onPressed: _week < store.semesterWeeks
-                    ? () => setState(() => _week++)
-                    : null,
-                icon: const Icon(Icons.chevron_right_rounded),
-              ),
-              IconButton(
-                tooltip: _adjustMode ? '退出本周调整' : '调整当前周',
-                onPressed: () => setState(() => _adjustMode = !_adjustMode),
-                color: _adjustMode
-                    ? Theme.of(context).colorScheme.primary
-                    : null,
-                icon: Icon(
-                  _adjustMode
-                      ? Icons.edit_calendar_rounded
-                      : Icons.edit_calendar_outlined,
+                IconButton(
+                  tooltip: '上一周',
+                  onPressed: _week > 1 ? () => setState(() => _week--) : null,
+                  icon: const Icon(Icons.chevron_left_rounded),
                 ),
-              ),
-              IconButton(
-                tooltip: '同步课表',
-                onPressed: widget.onSync,
-                icon: const Icon(Icons.sync_rounded),
-              ),
-            ],
-          ),
-        ),
-        if (store.courses.isEmpty)
-          Padding(
-            padding: const EdgeInsets.fromLTRB(10, 0, 10, 8),
-            child: Card(
-              child: ListTile(
-                leading: const Icon(Icons.touch_app_outlined),
-                title: const Text('点课表格子添加课程'),
-                subtitle: const Text('也可以使用右上角同步教务课表'),
-                trailing: TextButton(
+                IconButton(
+                  tooltip: '下一周',
+                  onPressed: _week < store.semesterWeeks
+                      ? () => setState(() => _week++)
+                      : null,
+                  icon: const Icon(Icons.chevron_right_rounded),
+                ),
+                IconButton(
+                  tooltip: _adjustMode ? '退出本周调整' : '调整当前周',
+                  onPressed: () => setState(() => _adjustMode = !_adjustMode),
+                  color: _adjustMode
+                      ? Theme.of(context).colorScheme.primary
+                      : null,
+                  icon: Icon(
+                    _adjustMode
+                        ? Icons.edit_calendar_rounded
+                        : Icons.edit_calendar_outlined,
+                  ),
+                ),
+                IconButton(
+                  tooltip: '同步课表',
                   onPressed: widget.onSync,
-                  child: const Text('同步'),
+                  icon: const Icon(Icons.sync_rounded),
+                ),
+              ],
+            ),
+          ),
+          if (store.courses.isEmpty)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(10, 0, 10, 8),
+              child: Card(
+                child: ListTile(
+                  leading: const Icon(Icons.touch_app_outlined),
+                  title: const Text('点课表格子添加课程'),
+                  subtitle: const Text('也可以使用右上角同步教务课表'),
+                  trailing: TextButton(
+                    onPressed: widget.onSync,
+                    child: const Text('同步'),
+                  ),
                 ),
               ),
             ),
+          Expanded(
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final rawFitHeight =
+                    (constraints.maxHeight - 62) / store.periodTimes.length;
+                final canFit = rawFitHeight >= 38;
+                final fitHeight = rawFitHeight.clamp(38.0, store.cellHeight);
+                final grid = ScheduleGrid(
+                  week: _week,
+                  semesterStart: store.semesterStart,
+                  courses: store.coursesForScheduleWeek(_week),
+                  showWeekends: store.showWeekends,
+                  onCourseTap: (course) => widget.onCourseTap(course, _week),
+                  periods: store.periodTimes,
+                  onEmptyCellTap: (weekday, section) => widget.onEmptyCellTap(
+                    weekday,
+                    section,
+                    _adjustMode ? _week : null,
+                  ),
+                  cellHeight: store.fitScheduleToScreen
+                      ? fitHeight
+                      : store.cellHeight,
+                  courseOpacity: store.courseOpacity,
+                  courseRadius: store.courseRadius,
+                  courseGap: store.courseGap,
+                  courseTextScale: store.courseTextScale,
+                  showLocation: store.showCourseLocation,
+                );
+                return GestureDetector(
+                  onHorizontalDragEnd: (details) {
+                    final velocity = details.primaryVelocity ?? 0;
+                    if (velocity < -300 && _week < store.semesterWeeks) {
+                      setState(() => _week++);
+                    } else if (velocity > 300 && _week > 1) {
+                      setState(() => _week--);
+                    }
+                  },
+                  child: Card(
+                    margin: const EdgeInsets.fromLTRB(10, 0, 10, 10),
+                    clipBehavior: Clip.antiAlias,
+                    child: store.fitScheduleToScreen && canFit
+                        ? RepaintBoundary(child: grid)
+                        : SingleChildScrollView(
+                            child: RepaintBoundary(child: grid),
+                          ),
+                  ),
+                );
+              },
+            ),
           ),
-        Expanded(
-          child: LayoutBuilder(
-            builder: (context, constraints) {
-              final rawFitHeight =
-                  (constraints.maxHeight - 62) / store.periodTimes.length;
-              final canFit = rawFitHeight >= 38;
-              final fitHeight = rawFitHeight.clamp(38.0, store.cellHeight);
-              final grid = ScheduleGrid(
-                week: _week,
-                semesterStart: store.semesterStart,
-                courses: store.coursesForScheduleWeek(_week),
-                showWeekends: store.showWeekends,
-                onCourseTap: (course) => widget.onCourseTap(course, _week),
-                periods: store.periodTimes,
-                onEmptyCellTap: (weekday, section) => widget.onEmptyCellTap(
-                  weekday,
-                  section,
-                  _adjustMode ? _week : null,
-                ),
-                cellHeight: store.fitScheduleToScreen
-                    ? fitHeight
-                    : store.cellHeight,
-                courseOpacity: store.courseOpacity,
-                courseRadius: store.courseRadius,
-                courseGap: store.courseGap,
-                courseTextScale: store.courseTextScale,
-                showLocation: store.showCourseLocation,
-              );
-              return GestureDetector(
-                onHorizontalDragEnd: (details) {
-                  final velocity = details.primaryVelocity ?? 0;
-                  if (velocity < -300 && _week < store.semesterWeeks) {
-                    setState(() => _week++);
-                  } else if (velocity > 300 && _week > 1) {
-                    setState(() => _week--);
-                  }
-                },
-                child: Card(
-                  margin: const EdgeInsets.fromLTRB(10, 0, 10, 10),
-                  clipBehavior: Clip.antiAlias,
-                  child: store.fitScheduleToScreen && canFit
-                      ? RepaintBoundary(child: grid)
-                      : SingleChildScrollView(
-                          child: RepaintBoundary(child: grid),
-                        ),
-                ),
-              );
-            },
-          ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 
