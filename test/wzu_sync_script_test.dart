@@ -13,5 +13,10 @@ void main() {
       wzuAssistantScript,
       contains("item.location || (hint && hint.location)"),
     );
+    expect(wzuAssistantScript, contains("p[1]=location"));
+    expect(
+      wzuAssistantScript,
+      contains("paragraphField(node, ['上课地点', '地点', '教室', '场地'], 1)"),
+    );
   });
 }

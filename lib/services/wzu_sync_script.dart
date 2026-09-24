@@ -77,6 +77,33 @@ const wzuAssistantScript = r'''
     }
     return '';
   };
+  const paragraphField = (node, labels, fallbackIndex) => {
+    if (!node || !node.querySelectorAll) return '';
+    const paragraphs = [...node.querySelectorAll(':scope > p, :scope > div > p')];
+    for (const paragraph of paragraphs) {
+      const raw = clean(paragraph.textContent);
+      for (const label of labels) {
+        const match = raw.match(new RegExp(label + '\\s*[:：]?\\s*(.+)'));
+        if (match && clean(match[1])) return clean(match[1]);
+      }
+    }
+    // WZU's grid view hides the labels with CSS. innerText therefore contains
+    // only the value: p[0]=section/week, p[1]=location, p[2]=teacher.
+    if (node.matches && node.matches('.timetable_con') && paragraphs[fallbackIndex]) {
+      const paragraph = paragraphs[fallbackIndex];
+      const visibleValues = [...paragraph.querySelectorAll('font, span')]
+        .filter(element => !element.matches('.hidden, [hidden], [aria-hidden="true"]'))
+        .map(element => clean(element.innerText || element.textContent))
+        .filter(value => value && !labels.some(label => value === label || value === label + '：'));
+      if (visibleValues.length) return visibleValues[visibleValues.length - 1];
+      let value = clean(paragraph.innerText || paragraph.textContent);
+      for (const label of labels) {
+        value = value.replace(new RegExp('^' + label + '\\s*[:：]?\\s*'), '');
+      }
+      return clean(value);
+    }
+    return '';
+  };
   const normalizeApiItem = (course) => {
     const sectionsText = apiField(course, ['jcs', 'jc', 'jcsText']);
     const sections = sectionsFromText(sectionsText);
@@ -266,10 +293,13 @@ const wzuAssistantScript = r'''
           (text.match(/\d+(?:\s*[-~至—–]\s*\d+)?\s*周(?:\s*[（(][单双]周?[）)])?/) || [])[0] || ''
         );
         const teacher = clean(attr(node, ['xm', 'teacher', 'jsxm']) ||
-          titledField(node, ['教师', '老师', '主讲']) || field(text, ['教师', '老师', '主讲']));
+          titledField(node, ['教师', '老师', '主讲']) ||
+          paragraphField(node, ['教师', '老师', '主讲'], 2) ||
+          field(text, ['教师', '老师', '主讲']));
         const courseLocation = clean(
           attr(node, ['cdmc', 'jxdd', 'jxcdmc', 'jxcd', 'classroomName', 'location', 'room']) ||
           titledField(node, ['上课地点', '地点', '教室', '场地']) ||
+          paragraphField(node, ['上课地点', '地点', '教室', '场地'], 1) ||
           field(text, ['上课地点', '地点', '教室', '场地'])
         );
         if (teacher || courseLocation) {
