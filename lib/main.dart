@@ -14,11 +14,6 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   final preferences = await SharedPreferences.getInstance();
   final store = ScheduleStore(preferences);
-  runApp(ShiguangApp(store: store));
-  unawaited(_bootstrap(store));
-}
-
-Future<void> _bootstrap(ScheduleStore store) async {
   await store.load();
   await store.recordAppOpen();
   final path = store.customFontPath;
@@ -27,11 +22,15 @@ Future<void> _bootstrap(ScheduleStore store) async {
     try {
       final loaded = await CustomFontService.load(path, family);
       if (!loaded) await store.clearCustomFont();
-      if (loaded) store.refresh();
     } catch (_) {
       await store.clearCustomFont();
     }
   }
+  runApp(ShiguangApp(store: store));
+  unawaited(_startNotifications(store));
+}
+
+Future<void> _startNotifications(ScheduleStore store) async {
   await NotificationService.instance.initialize();
   await NotificationService.instance.rescheduleAll(
     enabled: store.notificationsEnabled,
@@ -51,9 +50,9 @@ class ShiguangApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return DynamicColorBuilder(
-      builder: (dynamicLight, dynamicDark) => AnimatedBuilder(
-        animation: store,
-        builder: (context, _) {
+      builder: (dynamicLight, dynamicDark) => ValueListenableBuilder<int>(
+        valueListenable: store.themeRevision,
+        builder: (context, _, _) {
           final seed = Color(store.seedColorValue);
           final lightScheme = store.useDynamicColor && dynamicLight != null
               ? dynamicLight.harmonized()

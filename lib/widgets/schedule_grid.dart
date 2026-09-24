@@ -51,123 +51,136 @@ class ScheduleGrid extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final dayCount = showWeekends ? 7 : 5;
-    return Column(
-      children: [
-        SizedBox(
-          height: 52,
-          child: LayoutBuilder(
-            builder: (context, constraints) {
-              final dayWidth = (constraints.maxWidth - timeWidth) / dayCount;
-              return Row(
-                children: [
-                  const SizedBox(width: timeWidth),
-                  for (var day = 1; day <= dayCount; day++)
-                    SizedBox(
-                      width: dayWidth,
-                      child: _DayHeading(
-                        date: semesterStart.add(
-                          Duration(days: (week - 1) * 7 + day - 1),
-                        ),
-                        weekday: day,
-                      ),
-                    ),
-                ],
-              );
-            },
-          ),
-        ),
-        SizedBox(
-          height: periods.length * cellHeight,
-          child: LayoutBuilder(
-            builder: (context, constraints) {
-              final dayWidth = (constraints.maxWidth - timeWidth) / dayCount;
-              final displayed = courses
-                  .where((course) => course.weekday <= dayCount)
-                  .toList();
-              return Stack(
-                children: [
-                  for (var row = 0; row < periods.length; row++)
-                    Positioned(
-                      top: row * cellHeight,
-                      left: 0,
-                      right: 0,
-                      height: cellHeight,
-                      child: Row(
-                        children: [
-                          SizedBox(
-                            width: timeWidth,
-                            child: Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Text(
-                                  '${row + 1}',
-                                  style: Theme.of(context).textTheme.labelLarge
-                                      ?.copyWith(fontWeight: FontWeight.w800),
-                                ),
-                                Text(
-                                  '${periods[row].start}\n${periods[row].end}',
-                                  textAlign: TextAlign.center,
-                                  style: Theme.of(context).textTheme.labelSmall
-                                      ?.copyWith(fontSize: 8, height: 1.15),
-                                ),
-                              ],
-                            ),
+    return MediaQuery.withClampedTextScaling(
+      maxScaleFactor: 1.1,
+      child: Column(
+        children: [
+          SizedBox(
+            height: 52,
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final dayWidth = (constraints.maxWidth - timeWidth) / dayCount;
+                return Row(
+                  children: [
+                    const SizedBox(width: timeWidth),
+                    for (var day = 1; day <= dayCount; day++)
+                      SizedBox(
+                        width: dayWidth,
+                        child: _DayHeading(
+                          date: semesterStart.add(
+                            Duration(days: (week - 1) * 7 + day - 1),
                           ),
-                          for (var day = 0; day < dayCount; day++)
+                          weekday: day,
+                        ),
+                      ),
+                  ],
+                );
+              },
+            ),
+          ),
+          SizedBox(
+            height: periods.length * cellHeight,
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final dayWidth = (constraints.maxWidth - timeWidth) / dayCount;
+                final displayed = courses
+                    .where((course) => course.weekday <= dayCount)
+                    .toList();
+                return Stack(
+                  children: [
+                    for (var row = 0; row < periods.length; row++)
+                      Positioned(
+                        top: row * cellHeight,
+                        left: 0,
+                        right: 0,
+                        height: cellHeight,
+                        child: Row(
+                          children: [
                             SizedBox(
-                              width: dayWidth,
-                              child: Material(
-                                color: Colors.transparent,
-                                child: InkWell(
-                                  onTap: onEmptyCellTap == null
-                                      ? null
-                                      : () => onEmptyCellTap!(day + 1, row + 1),
-                                  child: DecoratedBox(
-                                    decoration: BoxDecoration(
-                                      border: Border(
-                                        left: BorderSide(
-                                          color: Theme.of(context).dividerColor
-                                              .withValues(alpha: .28),
-                                          width: .5,
-                                        ),
-                                        top: BorderSide(
-                                          color: Theme.of(context).dividerColor
-                                              .withValues(alpha: .28),
-                                          width: .5,
+                              width: timeWidth,
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Text(
+                                    '${row + 1}',
+                                    style: const TextStyle(
+                                      fontSize: 12,
+                                      height: 1,
+                                      fontWeight: FontWeight.w800,
+                                    ),
+                                  ),
+                                  Text(
+                                    '${periods[row].start}\n${periods[row].end}',
+                                    textAlign: TextAlign.center,
+                                    style: const TextStyle(
+                                      fontSize: 7.5,
+                                      height: 1.05,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            for (var day = 0; day < dayCount; day++)
+                              SizedBox(
+                                width: dayWidth,
+                                child: Material(
+                                  color: Colors.transparent,
+                                  child: InkWell(
+                                    onTap: onEmptyCellTap == null
+                                        ? null
+                                        : () =>
+                                              onEmptyCellTap!(day + 1, row + 1),
+                                    child: DecoratedBox(
+                                      decoration: BoxDecoration(
+                                        border: Border(
+                                          left: BorderSide(
+                                            color: Theme.of(context)
+                                                .dividerColor
+                                                .withValues(alpha: .28),
+                                            width: .5,
+                                          ),
+                                          top: BorderSide(
+                                            color: Theme.of(context)
+                                                .dividerColor
+                                                .withValues(alpha: .28),
+                                            width: .5,
+                                          ),
                                         ),
                                       ),
                                     ),
                                   ),
                                 ),
                               ),
-                            ),
-                        ],
+                          ],
+                        ),
                       ),
-                    ),
-                  for (final course in displayed)
-                    Positioned(
-                      left:
-                          timeWidth +
-                          (course.weekday - 1) * dayWidth +
-                          courseGap,
-                      top: (course.startSection - 1) * cellHeight + courseGap,
-                      width: dayWidth - courseGap * 2,
-                      height: course.sectionCount * cellHeight - courseGap * 2,
-                      child: _CourseCard(
-                        course: course,
-                        opacity: courseOpacity,
-                        radius: courseRadius,
-                        textScale: courseTextScale,
-                        showLocation: showLocation,
-                        onTap: () => onCourseTap(course),
+                    for (final course in displayed)
+                      Positioned(
+                        left:
+                            timeWidth +
+                            (course.weekday - 1) * dayWidth +
+                            courseGap,
+                        top: (course.startSection - 1) * cellHeight + courseGap,
+                        width: dayWidth - courseGap * 2,
+                        height:
+                            course.sectionCount * cellHeight - courseGap * 2,
+                        child: _CourseCard(
+                          course: course,
+                          week: week,
+                          opacity: courseOpacity,
+                          radius: courseRadius,
+                          textScale: courseTextScale,
+                          showLocation: showLocation,
+                          onTap: () => onCourseTap(course),
+                        ),
                       ),
-                    ),
-                ],
-              );
-            },
+                  ],
+                );
+              },
+            ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }
@@ -223,6 +236,7 @@ class _CourseCard extends StatelessWidget {
     required this.radius,
     required this.textScale,
     required this.showLocation,
+    required this.week,
   });
 
   final Course course;
@@ -231,97 +245,128 @@ class _CourseCard extends StatelessWidget {
   final double radius;
   final double textScale;
   final bool showLocation;
+  final int week;
 
   @override
   Widget build(BuildContext context) {
-    final color = courseColors[course.colorIndex % courseColors.length];
+    final baseColor = courseColors[course.colorIndex % courseColors.length];
+    final cancelled = course.cancelledWeeks.contains(week);
+    final active = course.weeks.contains(week) && !cancelled;
+    final allOdd =
+        course.weeks.length > 1 && course.weeks.every((value) => value.isOdd);
+    final allEven =
+        course.weeks.length > 1 && course.weeks.every((value) => value.isEven);
+    final statusBadge = cancelled
+        ? '删'
+        : active && course.badge.isNotEmpty
+        ? course.badge
+        : allOdd
+        ? '单'
+        : allEven
+        ? '双'
+        : active
+        ? ''
+        : '非';
+    final color = active ? baseColor : const Color(0xFF727780);
+    final effectiveOpacity = active ? opacity : .56;
     return Material(
       color: Colors.transparent,
+      borderRadius: BorderRadius.circular(radius),
+      clipBehavior: Clip.antiAlias,
       child: InkWell(
         borderRadius: BorderRadius.circular(radius),
         onTap: onTap,
         child: Ink(
-          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
+          padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 3),
           decoration: BoxDecoration(
             gradient: LinearGradient(
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
               colors: [
-                color.withValues(alpha: opacity),
-                color.withValues(alpha: (opacity - .14).clamp(.15, 1)),
+                color.withValues(alpha: effectiveOpacity),
+                color.withValues(alpha: (effectiveOpacity - .14).clamp(.15, 1)),
               ],
             ),
             borderRadius: BorderRadius.circular(radius),
             border: Border.all(color: Colors.white.withValues(alpha: .32)),
-            boxShadow: [
-              BoxShadow(
-                color: color.withValues(alpha: .18 * opacity),
-                blurRadius: 8,
-                offset: const Offset(0, 3),
-              ),
-            ],
           ),
-          child: Stack(
-            alignment: Alignment.topCenter,
-            children: [
-              Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  if (course.badge.isNotEmpty) const SizedBox(height: 15),
-                  Text(
-                    course.name,
-                    textAlign: TextAlign.center,
-                    maxLines: 4,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 10.5 * textScale,
-                      height: 1.18,
-                      fontWeight: FontWeight.w800,
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final compact = constraints.maxHeight < 48;
+              final showRoom =
+                  showLocation &&
+                  course.location.isNotEmpty &&
+                  constraints.maxHeight >= 48;
+              return ClipRect(
+                child: Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          course.name,
+                          textAlign: TextAlign.center,
+                          maxLines: compact ? 2 : 4,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 10.5 * textScale,
+                            height: 1.12,
+                            fontWeight: FontWeight.w800,
+                            decoration: cancelled
+                                ? TextDecoration.lineThrough
+                                : null,
+                          ),
+                        ),
+                        if (showRoom) ...[
+                          const SizedBox(height: 2),
+                          Text(
+                            course.location,
+                            textAlign: TextAlign.center,
+                            maxLines: constraints.maxHeight >= 76 ? 2 : 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              color: Colors.white.withValues(alpha: .88),
+                              fontSize: 8.5 * textScale,
+                              height: 1.08,
+                            ),
+                          ),
+                        ],
+                      ],
                     ),
-                  ),
-                  if (showLocation && course.location.isNotEmpty) ...[
-                    const SizedBox(height: 4),
-                    Text(
-                      course.location,
-                      textAlign: TextAlign.center,
-                      maxLines: course.sectionCount > 1 ? 2 : 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: Colors.white.withValues(alpha: .9),
-                        fontSize: 8.5 * textScale,
-                        height: 1.12,
+                    if (statusBadge.isNotEmpty)
+                      Positioned(
+                        top: 0,
+                        right: 0,
+                        child: Container(
+                          constraints: const BoxConstraints(minWidth: 15),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 3,
+                            vertical: 1,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withValues(alpha: .92),
+                            borderRadius: BorderRadius.circular(7),
+                          ),
+                          child: Text(
+                            statusBadge,
+                            textAlign: TextAlign.center,
+                            maxLines: 1,
+                            overflow: TextOverflow.clip,
+                            style: TextStyle(
+                              color: color,
+                              fontSize: 7.5 * textScale,
+                              fontWeight: FontWeight.w900,
+                            ),
+                          ),
+                        ),
                       ),
-                    ),
                   ],
-                ],
-              ),
-              if (course.badge.isNotEmpty)
-                Positioned(
-                  top: 0,
-                  right: 0,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 4,
-                      vertical: 1,
-                    ),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: .9),
-                      borderRadius: BorderRadius.circular(7),
-                    ),
-                    child: Text(
-                      course.badge,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: color,
-                        fontSize: 7.5 * textScale,
-                        fontWeight: FontWeight.w900,
-                      ),
-                    ),
-                  ),
                 ),
-            ],
+              );
+            },
           ),
         ),
       ),

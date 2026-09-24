@@ -1,6 +1,5 @@
 import 'dart:io';
 import 'dart:math';
-import 'dart:ui';
 
 import 'package:flutter/material.dart';
 
@@ -31,31 +30,17 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  int _index = 1;
+  late int _index;
   late final String _sessionEgg;
-  bool _startupApplied = false;
 
   ScheduleStore get store => widget.store;
 
   @override
   void initState() {
     super.initState();
+    _index = store.startupTab;
     _sessionEgg = _eggForSession();
-    store.addListener(_applyStartupTab);
-    _applyStartupTab();
-  }
-
-  void _applyStartupTab() {
-    if (!store.isLoaded || _startupApplied || !mounted) return;
-    _startupApplied = true;
-    setState(() => _index = store.startupTab);
     WidgetsBinding.instance.addPostFrameCallback((_) => _showDueReminder());
-  }
-
-  @override
-  void dispose() {
-    store.removeListener(_applyStartupTab);
-    super.dispose();
   }
 
   @override
@@ -63,7 +48,6 @@ class _HomeScreenState extends State<HomeScreen> {
     return AnimatedBuilder(
       animation: store,
       builder: (context, _) {
-        if (!store.isLoaded) return const _StartupSkeleton();
         return Scaffold(
           backgroundColor: Colors.transparent,
           body: _AppBackground(
@@ -100,6 +84,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                   _ProfilePage(
                     store: store,
+                    active: _index == 3,
                     onSync: _syncFromWzu,
                     onOpenSettings: () => Navigator.of(context).push(
                       MaterialPageRoute<void>(
@@ -308,6 +293,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<void> _showCourse(Course course, {int? week}) async {
     final targetWeek = week ?? store.weekFor(DateTime.now()).clamp(1, 25);
+    final cancelledThisWeek = course.cancelledWeeks.contains(targetWeek);
     final action = await showModalBottomSheet<String>(
       context: context,
       showDragHandle: true,
@@ -371,9 +357,20 @@ class _HomeScreenState extends State<HomeScreen> {
                 children: [
                   Expanded(
                     child: OutlinedButton.icon(
-                      onPressed: () => Navigator.pop(context, 'cancel-week'),
-                      icon: const Icon(Icons.event_busy_outlined),
-                      label: Text('第 $targetWeek 周停课'),
+                      onPressed: () => Navigator.pop(
+                        context,
+                        cancelledThisWeek ? 'restore-week' : 'cancel-week',
+                      ),
+                      icon: Icon(
+                        cancelledThisWeek
+                            ? Icons.restore_rounded
+                            : Icons.event_busy_outlined,
+                      ),
+                      label: Text(
+                        cancelledThisWeek
+                            ? '恢复第 $targetWeek 周'
+                            : '第 $targetWeek 周停课',
+                      ),
                     ),
                   ),
                   const SizedBox(width: 10),
@@ -435,6 +432,12 @@ class _HomeScreenState extends State<HomeScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context)
             .showSnackBar(SnackBar(content: Text('已将第 $targetWeek 周标记为停课')));
+      }
+    } else if (action == 'restore-week') {
+      await store.restoreCourseForWeek(course.id, targetWeek);
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('已恢复第 $targetWeek 周课程')));
       }
     } else if (action == 'delete') {
       final confirmed = await showDialog<bool>(
@@ -747,7 +750,7 @@ class _SchedulePageState extends State<_SchedulePage> {
               final grid = ScheduleGrid(
                 week: _week,
                 semesterStart: store.semesterStart,
-                courses: store.coursesForWeek(_week),
+                courses: store.coursesForScheduleWeek(_week),
                 showWeekends: store.showWeekends,
                 onCourseTap: (course) => widget.onCourseTap(course, _week),
                 periods: store.periodTimes,
@@ -778,8 +781,10 @@ class _SchedulePageState extends State<_SchedulePage> {
                   margin: const EdgeInsets.fromLTRB(10, 0, 10, 10),
                   clipBehavior: Clip.antiAlias,
                   child: store.fitScheduleToScreen && canFit
-                      ? grid
-                      : SingleChildScrollView(child: grid),
+                      ? RepaintBoundary(child: grid)
+                      : SingleChildScrollView(
+                          child: RepaintBoundary(child: grid),
+                        ),
                 ),
               );
             },
@@ -971,11 +976,13 @@ class _HomeworkOverview extends StatelessWidget {
 class _ProfilePage extends StatelessWidget {
   const _ProfilePage({
     required this.store,
+    required this.active,
     required this.onSync,
     required this.onOpenSettings,
   });
 
   final ScheduleStore store;
+  final bool active;
   final VoidCallback onSync;
   final VoidCallback onOpenSettings;
 
@@ -1104,6 +1111,7 @@ class _ProfilePage extends StatelessWidget {
               if (store.wereadEnabled) ...[
                 const SizedBox(height: 10),
                 _ReadingSummaryTile(
+                  active: active,
                   onTap: () => Navigator.of(context).push(
                     MaterialPageRoute<void>(
                       builder: (_) => const ReadingStatsScreen(),
@@ -1337,10 +1345,12 @@ class _TodayCourseCard extends StatelessWidget {
       clipBehavior: Clip.antiAlias,
       child: InkWell(
         onTap: onTap,
-        child: IntrinsicHeight(
+        child: Container(
+          decoration: BoxDecoration(
+            border: Border(left: BorderSide(color: color, width: 7)),
+          ),
           child: Row(
             children: [
-              Container(width: 7, color: color),
               SizedBox(
                 width: 88,
                 child: Padding(
@@ -1362,7 +1372,9 @@ class _TodayCourseCard extends StatelessWidget {
                   ),
                 ),
               ),
-              VerticalDivider(
+              Container(
+                width: 1,
+                height: 52,
                 color: Theme.of(context).colorScheme.outlineVariant,
               ),
               Expanded(
@@ -1426,39 +1438,61 @@ class _TodayCourseCard extends StatelessWidget {
 }
 
 class _ReadingSummaryTile extends StatefulWidget {
-  const _ReadingSummaryTile({required this.onTap});
+  const _ReadingSummaryTile({required this.onTap, required this.active});
 
   final VoidCallback onTap;
+  final bool active;
 
   @override
   State<_ReadingSummaryTile> createState() => _ReadingSummaryTileState();
 }
 
 class _ReadingSummaryTileState extends State<_ReadingSummaryTile> {
-  late final Future<ReadingStats> _stats = WereadService.instance
-      .getMonthlyStats();
+  Future<ReadingStats>? _stats;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.active) _stats = WereadService.instance.getMonthlyStats();
+  }
+
+  @override
+  void didUpdateWidget(covariant _ReadingSummaryTile oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.active && !oldWidget.active && _stats == null) {
+      _stats = WereadService.instance.getMonthlyStats();
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     return Card(
       clipBehavior: Clip.antiAlias,
-      child: FutureBuilder<ReadingStats>(
-        future: _stats,
-        builder: (context, snapshot) {
-          final subtitle = snapshot.hasData
-              ? '${snapshot.requireData.readDays} 天 · ${snapshot.requireData.durationLabel}'
-              : snapshot.hasError
-              ? '暂时无法读取，点击查看'
-              : '正在读取本地缓存…';
-          return ListTile(
-            leading: const Icon(Icons.auto_stories_outlined),
-            title: const Text('本月阅读'),
-            subtitle: Text(subtitle),
-            trailing: const Icon(Icons.chevron_right_rounded),
-            onTap: widget.onTap,
-          );
-        },
-      ),
+      child: _stats == null
+          ? ListTile(
+              leading: const Icon(Icons.auto_stories_outlined),
+              title: const Text('本月阅读'),
+              subtitle: const Text('进入“我的”后读取本地缓存'),
+              trailing: const Icon(Icons.chevron_right_rounded),
+              onTap: widget.onTap,
+            )
+          : FutureBuilder<ReadingStats>(
+              future: _stats,
+              builder: (context, snapshot) {
+                final subtitle = snapshot.hasData
+                    ? '${snapshot.requireData.readDays} 天 · ${snapshot.requireData.durationLabel}'
+                    : snapshot.hasError
+                    ? '暂时无法读取，点击查看'
+                    : '正在读取本地缓存…';
+                return ListTile(
+                  leading: const Icon(Icons.auto_stories_outlined),
+                  title: const Text('本月阅读'),
+                  subtitle: Text(subtitle),
+                  trailing: const Icon(Icons.chevron_right_rounded),
+                  onTap: widget.onTap,
+                );
+              },
+            ),
     );
   }
 }
@@ -1706,19 +1740,13 @@ class _AppBackground extends StatelessWidget {
           ),
         ),
         if (store.backgroundPath != null)
-          ImageFiltered(
-            imageFilter: ImageFilter.blur(
-              sigmaX: store.glassEffect ? 4 : 0,
-              sigmaY: store.glassEffect ? 4 : 0,
-            ),
-            child: Image.file(
-              File(store.backgroundPath!),
-              fit: BoxFit.cover,
-              cacheWidth: 1440,
-              filterQuality: FilterQuality.low,
-              gaplessPlayback: true,
-              errorBuilder: (_, _, _) => const SizedBox.shrink(),
-            ),
+          Image.file(
+            File(store.backgroundPath!),
+            fit: BoxFit.cover,
+            cacheWidth: 1080,
+            filterQuality: FilterQuality.low,
+            gaplessPlayback: true,
+            errorBuilder: (_, _, _) => const SizedBox.shrink(),
           ),
         if (store.backgroundPath != null)
           ColoredBox(
@@ -1754,60 +1782,6 @@ class _EasterEggCard extends StatelessWidget {
       ),
     );
   }
-}
-
-class _StartupSkeleton extends StatelessWidget {
-  const _StartupSkeleton();
-
-  @override
-  Widget build(BuildContext context) {
-    final color = Theme.of(context).colorScheme.surfaceContainerHighest;
-    return Scaffold(
-      body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Container(width: 116, height: 32, decoration: _shape(color, 12)),
-              const SizedBox(height: 22),
-              Row(
-                children: [
-                  for (var i = 0; i < 5; i++) ...[
-                    Expanded(
-                      child: Container(
-                        height: 44,
-                        decoration: _shape(color, 12),
-                      ),
-                    ),
-                    if (i < 4) const SizedBox(width: 7),
-                  ],
-                ],
-              ),
-              const SizedBox(height: 10),
-              Expanded(
-                child: Row(
-                  children: [
-                    Container(width: 54, decoration: _shape(color, 14)),
-                    const SizedBox(width: 8),
-                    for (var i = 0; i < 3; i++) ...[
-                      Expanded(child: Container(decoration: _shape(color, 16))),
-                      if (i < 2) const SizedBox(width: 8),
-                    ],
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  BoxDecoration _shape(Color color, double radius) => BoxDecoration(
-    color: color.withValues(alpha: .72),
-    borderRadius: BorderRadius.circular(radius),
-  );
 }
 
 class _DetailLine extends StatelessWidget {

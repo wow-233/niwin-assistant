@@ -37,8 +37,8 @@ class GlassPanel extends StatelessWidget {
       boxShadow: [
         BoxShadow(
           color: Colors.black.withValues(alpha: 0.07),
-          blurRadius: 24,
-          offset: const Offset(0, 10),
+          blurRadius: 12,
+          offset: const Offset(0, 5),
         ),
       ],
     );
@@ -51,7 +51,7 @@ class GlassPanel extends StatelessWidget {
     return ClipRRect(
       borderRadius: BorderRadius.circular(borderRadius),
       child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
+        filter: ImageFilter.blur(sigmaX: 6, sigmaY: 6),
         child: content,
       ),
     );

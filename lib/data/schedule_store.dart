@@ -53,6 +53,7 @@ class ScheduleStore extends ChangeNotifier {
   static const _countdownsKey = 'countdowns.v1';
 
   final SharedPreferences _preferences;
+  final ValueNotifier<int> themeRevision = ValueNotifier<int>(0);
   final List<Course> _courses = [];
   final List<Homework> _homework = [];
   final List<QuickLink> _quickLinks = [];
@@ -270,6 +271,26 @@ class ScheduleStore extends ChangeNotifier {
       });
   }
 
+  List<Course> coursesForScheduleWeek(int week) {
+    final result = _courses.where((course) {
+      if (course.weeks.isEmpty) return false;
+      final sorted = course.weeks.toList()..sort();
+      return week >= sorted.first && week <= sorted.last;
+    }).toList();
+    result.sort((a, b) {
+      final byDay = a.weekday.compareTo(b.weekday);
+      if (byDay != 0) return byDay;
+      final bySection = a.startSection.compareTo(b.startSection);
+      if (bySection != 0) return bySection;
+      final aActive =
+          a.weeks.contains(week) && !a.cancelledWeeks.contains(week);
+      final bActive =
+          b.weeks.contains(week) && !b.cancelledWeeks.contains(week);
+      return aActive == bActive ? 0 : (aActive ? 1 : -1);
+    });
+    return result;
+  }
+
   Future<void> saveCourse(Course course) async {
     final index = _courses.indexWhere((item) => item.id == course.id);
     if (index == -1) {
@@ -293,6 +314,16 @@ class ScheduleStore extends ChangeNotifier {
     final index = _courses.indexWhere((course) => course.id == id);
     if (index == -1) return;
     final cancelled = {..._courses[index].cancelledWeeks, week};
+    _courses[index] = _courses[index].copyWith(cancelledWeeks: cancelled);
+    await _persistCourses();
+    _scheduleNotificationSync();
+    notifyListeners();
+  }
+
+  Future<void> restoreCourseForWeek(String id, int week) async {
+    final index = _courses.indexWhere((course) => course.id == id);
+    if (index == -1) return;
+    final cancelled = {..._courses[index].cancelledWeeks}..remove(week);
     _courses[index] = _courses[index].copyWith(cancelledWeeks: cancelled);
     await _persistCourses();
     _scheduleNotificationSync();
@@ -347,6 +378,7 @@ class ScheduleStore extends ChangeNotifier {
   Future<void> setGlassEffect(bool value) async {
     glassEffect = value;
     await _preferences.setBool(_glassKey, value);
+    _notifyThemeChanged();
     notifyListeners();
   }
 
@@ -574,23 +606,33 @@ class ScheduleStore extends ChangeNotifier {
     notifyListeners();
   }
 
-  void refresh() => notifyListeners();
+  void refresh() {
+    _notifyThemeChanged();
+    notifyListeners();
+  }
+
+  void _notifyThemeChanged() {
+    themeRevision.value++;
+  }
 
   Future<void> setUseDynamicColor(bool value) async {
     useDynamicColor = value;
     await _preferences.setBool(_dynamicColorKey, value);
+    _notifyThemeChanged();
     notifyListeners();
   }
 
   Future<void> setThemeMode(String value) async {
     themeMode = value;
     await _preferences.setString(_themeModeKey, value);
+    _notifyThemeChanged();
     notifyListeners();
   }
 
   Future<void> setSeedColor(int value) async {
     seedColorValue = value;
     await _preferences.setInt(_seedColorKey, value);
+    _notifyThemeChanged();
     notifyListeners();
   }
 
@@ -613,6 +655,7 @@ class ScheduleStore extends ChangeNotifier {
         // The file may already have been removed by the operating system.
       }
     }
+    _notifyThemeChanged();
     notifyListeners();
   }
 
@@ -631,6 +674,7 @@ class ScheduleStore extends ChangeNotifier {
         // Missing files do not prevent switching back to the system font.
       }
     }
+    _notifyThemeChanged();
     notifyListeners();
   }
 
@@ -683,6 +727,7 @@ class ScheduleStore extends ChangeNotifier {
   @override
   void dispose() {
     _notificationSyncTimer?.cancel();
+    themeRevision.dispose();
     super.dispose();
   }
 }
