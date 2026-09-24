@@ -52,6 +52,27 @@ void main() {
     expect(courses.single.location, '南校区南9-B302');
   });
 
+  test('accepts common Zhengfang classroom field aliases', () {
+    final aliases = <String, String>{
+      'jxcd': '南校区南3-B202',
+      'classroomName': '北校区北9-B303',
+      'roomName': '南校区信息楼 A101',
+    };
+    for (final entry in aliases.entries) {
+      final courses = ZhengfangParser.parsePortalItems([
+        {
+          'name': '字段别名测试',
+          'day': 1,
+          'startSection': 1,
+          'sectionCount': 2,
+          'weeksText': '1-16周',
+          entry.key: entry.value,
+        },
+      ]);
+      expect(courses.single.location, entry.value);
+    }
+  });
+
   test('does not invent weekday or section for ambiguous imports', () {
     final courses = ZhengfangParser.parsePortalItems([
       {'name': '无法定位的课程', 'text': '无法定位的课程\n教师：张老师\n1-16周'},

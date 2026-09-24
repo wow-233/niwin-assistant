@@ -133,6 +133,14 @@ class _WzuSyncScreenState extends State<WzuSyncScreen> {
       if (mounted) setState(() => _status = '识别到课表页面，但没有找到可导入课程');
       return;
     }
+    final locationCount = courses
+        .where((course) => course.location.isNotEmpty)
+        .length;
+    if (mounted) {
+      setState(
+        () => _status = '已识别 ${courses.length} 门课，其中 $locationCount 门包含地点',
+      );
+    }
     await _previewImport(courses);
   }
 
@@ -175,8 +183,8 @@ class _WzuSyncScreenState extends State<WzuSyncScreen> {
                   ),
                   const SizedBox(height: 6),
                   Text(
-                    _extractMethod == 'zhengfang-api'
-                        ? '已读取正方结构化课表数据。请重点核对星期、节次和周次；导入只替换上次同步的课程。'
+                    _extractMethod.startsWith('zhengfang-api')
+                        ? '已读取正方结构化数据，并用页面上显示的教师和地点补齐缺失字段。导入只替换上次同步的课程。'
                         : '已按合并单元格坐标解析。请重点核对星期、节次和周次；手动课程会保留。',
                     style: Theme.of(context).textTheme.bodyMedium,
                   ),

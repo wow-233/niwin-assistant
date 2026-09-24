@@ -98,6 +98,32 @@ const wzuAssistantScript = r'''
       confidence: 'api'
     };
   };
+  const findCourseList = (value, depth = 0) => {
+    if (depth > 5 || !value || typeof value !== 'object') return null;
+    if (Array.isArray(value)) {
+      if (value.some(item => item && typeof item === 'object' &&
+          (apiField(item, ['kcmc', 'courseName']) || apiField(item, ['xqj', 'weekday'])))) {
+        return value;
+      }
+      for (const item of value) {
+        const nested = findCourseList(item, depth + 1);
+        if (nested) return nested;
+      }
+      return null;
+    }
+    for (const key of ['kbList', 'items', 'rows', 'data']) {
+      if (!(key in value)) continue;
+      const nested = findCourseList(value[key], depth + 1);
+      if (nested) return nested;
+    }
+    for (const nestedValue of Object.values(value)) {
+      const nested = findCourseList(nestedValue, depth + 1);
+      if (nested) return nested;
+    }
+    return null;
+  };
+
+  let apiItems = [];
 
   // New Zhengfang (jwglxt): read the same-origin structured timetable data.
   try {
@@ -110,24 +136,30 @@ const wzuAssistantScript = r'''
         : (location.pathname.includes('/jwglxt/')
             ? location.pathname.substring(0, location.pathname.indexOf('/jwglxt/') + 8)
             : '/jwglxt');
-      const endpoint = root.replace(/\/$/, '') + '/kbcx/xskbcx_cxXsgrkb.html?gnmkdm=N253508';
+      const query = new URLSearchParams(location.search);
+      const gnmkdm = query.get('gnmkdm') || 'N253508';
+      const endpoint = root.replace(/\/$/, '') +
+        '/kbcx/xskbcx_cxXsgrkb.html?gnmkdm=' + encodeURIComponent(gnmkdm);
       const params = new URLSearchParams();
       if (xnm) params.set('xnm', xnm);
       if (xqm) params.set('xqm', xqm);
+      params.set('kzlx', 'ck');
+      params.set('xsdm', '');
+      params.set('kclbdm', '');
+      params.set('kclxdm', '');
       const response = await fetch(endpoint, {
         method: 'POST',
         credentials: 'include',
-        headers: {'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8'},
+        headers: {
+          'X-Requested-With': 'XMLHttpRequest',
+          'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8'
+        },
         body: params.toString()
       });
       if (response.ok) {
         const payload = await response.json();
-        const list = Array.isArray(payload) ? payload : (payload.kbList || payload.items || []);
-        const apiItems = list.map(normalizeApiItem).filter(Boolean);
-        if (apiItems.length) {
-          send({type: 'courses', items: apiItems, method: 'zhengfang-api'});
-          return;
-        }
+        const list = findCourseList(payload) || [];
+        apiItems = list.map(normalizeApiItem).filter(Boolean);
       }
     }
   } catch (_) {
@@ -135,6 +167,7 @@ const wzuAssistantScript = r'''
   }
 
   const items = [];
+  const detailHints = [];
   const fingerprints = new Set();
   const pushItem = (item) => {
     if (!item || !item.name || !(item.day >= 1 && item.day <= 7) ||
@@ -232,6 +265,16 @@ const wzuAssistantScript = r'''
           attr(node, ['zcd', 'weeks', 'weekText']) ||
           (text.match(/\d+(?:\s*[-~至—–]\s*\d+)?\s*周(?:\s*[（(][单双]周?[）)])?/) || [])[0] || ''
         );
+        const teacher = clean(attr(node, ['xm', 'teacher', 'jsxm']) ||
+          titledField(node, ['教师', '老师', '主讲']) || field(text, ['教师', '老师', '主讲']));
+        const courseLocation = clean(
+          attr(node, ['cdmc', 'jxdd', 'jxcdmc', 'jxcd', 'classroomName', 'location', 'room']) ||
+          titledField(node, ['上课地点', '地点', '教室', '场地']) ||
+          field(text, ['上课地点', '地点', '教室', '场地'])
+        );
+        if (teacher || courseLocation) {
+          detailHints.push({name, day, startSection: start, teacher, location: courseLocation});
+        }
         pushItem({
           name,
           text,
@@ -239,18 +282,35 @@ const wzuAssistantScript = r'''
           startSection: start,
           sectionCount: count,
           weeksText,
-          teacher: clean(attr(node, ['xm', 'teacher', 'jsxm']) ||
-            titledField(node, ['教师', '老师', '主讲']) || field(text, ['教师', '老师', '主讲'])),
-          location: clean(attr(node, ['cdmc', 'jxdd', 'jxcdmc', 'location', 'room']) ||
-            titledField(node, ['上课地点', '地点', '教室', '场地']) ||
-            field(text, ['上课地点', '地点', '教室', '场地'])),
+          teacher,
+          location: courseLocation,
           confidence: 'dom-matrix'
         });
       }
     }
   }
 
-  if (items.length) {
+  if (apiItems.length) {
+    const enriched = apiItems.map(item => {
+      const candidates = [...items, ...detailHints].filter(other =>
+        clean(other.name) === clean(item.name) &&
+        (!(other.day >= 1) || other.day === item.day) &&
+        (!(other.startSection >= 1) || other.startSection === item.startSection));
+      const hint = candidates.find(other => other.location) || candidates[0];
+      return {
+        ...item,
+        teacher: item.teacher || (hint && hint.teacher) || '',
+        location: item.location || (hint && hint.location) || ''
+      };
+    });
+    for (const item of items) {
+      const exists = enriched.some(other => clean(other.name) === clean(item.name) &&
+        other.day === item.day && other.startSection === item.startSection &&
+        other.sectionCount === item.sectionCount);
+      if (!exists) enriched.push(item);
+    }
+    send({type: 'courses', items: enriched, method: 'zhengfang-api+dom'});
+  } else if (items.length) {
     send({type: 'courses', items, method: 'dom-matrix'});
   } else {
     send({type: 'status', message: '没有找到结构明确的课程。请先打开“个人课表”、选好学期并查询，再点提取。'});
