@@ -1,8 +1,16 @@
 package app.shiguang.shiguang_schedule
 
 import android.Manifest
+import android.annotation.SuppressLint
+import android.bluetooth.BluetoothAdapter
+import android.bluetooth.le.ScanCallback
+import android.bluetooth.le.ScanResult
+import android.bluetooth.le.ScanSettings
 import android.content.ContentValues
 import android.content.pm.PackageManager
+import android.os.Build
+import android.os.Handler
+import android.os.Looper
 import android.provider.CalendarContract
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
@@ -13,25 +21,27 @@ import java.util.TimeZone
 class MainActivity : FlutterActivity() {
     private val channelName = "app.shiguang/calendar"
     private val permissionRequest = 5201
+    private val bluetoothPermissionRequest = 5202
     private var pendingCall: MethodCall? = null
     private var pendingResult: MethodChannel.Result? = null
+    private var pendingBluetoothResult: MethodChannel.Result? = null
+    private val handler = Handler(Looper.getMainLooper())
+    private var bluetoothScanCallback: ScanCallback? = null
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
-        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "app.shiguang/external_apps")
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "app.shiguang/quzhi")
             .setMethodCallHandler { call, result ->
-                if (call.method != "launchPackage") {
+                if (call.method != "scanNearby") {
                     result.notImplemented()
                     return@setMethodCallHandler
                 }
-                val packageName = call.argument<String>("package")
-                val intent = packageName?.let { packageManager.getLaunchIntentForPackage(it) }
-                if (intent == null) {
-                    result.success(false)
+                val permissions = bluetoothPermissions()
+                if (permissions.all { checkSelfPermission(it) == PackageManager.PERMISSION_GRANTED }) {
+                    startBluetoothScan(result)
                 } else {
-                    intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
-                    startActivity(intent)
-                    result.success(true)
+                    pendingBluetoothResult = result
+                    requestPermissions(permissions, bluetoothPermissionRequest)
                 }
             }
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, channelName)
@@ -60,6 +70,18 @@ class MainActivity : FlutterActivity() {
         grantResults: IntArray,
     ) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode == bluetoothPermissionRequest) {
+            val result = pendingBluetoothResult
+            pendingBluetoothResult = null
+            if (result != null) {
+                if (grantResults.isNotEmpty() && grantResults.all { it == PackageManager.PERMISSION_GRANTED }) {
+                    startBluetoothScan(result)
+                } else {
+                    result.error("bluetooth_permission_denied", "未获得附近设备权限", null)
+                }
+            }
+            return
+        }
         if (requestCode != permissionRequest) return
         val call = pendingCall
         val result = pendingResult
@@ -70,6 +92,91 @@ class MainActivity : FlutterActivity() {
             writeEvents(call, result)
         } else {
             result.error("calendar_permission_denied", "未获得日历读写权限", null)
+        }
+    }
+
+    private fun bluetoothPermissions(): Array<String> {
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            arrayOf(Manifest.permission.BLUETOOTH_SCAN, Manifest.permission.BLUETOOTH_CONNECT)
+        } else {
+            arrayOf(Manifest.permission.ACCESS_FINE_LOCATION)
+        }
+    }
+
+    @SuppressLint("MissingPermission")
+    private fun startBluetoothScan(result: MethodChannel.Result) {
+        if (bluetoothScanCallback != null) {
+            result.error("scan_in_progress", "附近设备扫描正在进行", null)
+            return
+        }
+        val adapter = BluetoothAdapter.getDefaultAdapter()
+        if (adapter == null) {
+            result.error("bluetooth_unavailable", "当前设备不支持蓝牙", null)
+            return
+        }
+        if (!adapter.isEnabled) {
+            result.error("bluetooth_disabled", "请先开启系统蓝牙", null)
+            return
+        }
+        val scanner = adapter.bluetoothLeScanner
+        if (scanner == null) {
+            result.error("scanner_unavailable", "无法启动蓝牙扫描", null)
+            return
+        }
+        val devices = linkedMapOf<String, Map<String, Any>>()
+        var completed = false
+        fun finish(errorCode: Int? = null) {
+            if (completed) return
+            completed = true
+            bluetoothScanCallback?.let { runCatching { scanner.stopScan(it) } }
+            bluetoothScanCallback = null
+            if (errorCode == null) {
+                result.success(devices.values.toList())
+            } else {
+                result.error("bluetooth_scan_failed", "蓝牙扫描失败（$errorCode）", null)
+            }
+        }
+        val callback = object : ScanCallback() {
+            override fun onScanResult(callbackType: Int, scanResult: ScanResult) {
+                val name = scanResult.scanRecord?.deviceName
+                    ?: runCatching { scanResult.device.name }.getOrNull()
+                    ?: return
+                if (!name.startsWith("KLCXKJ") || scanResult.rssi < -90) return
+                val address = runCatching { scanResult.device.address }.getOrNull() ?: return
+                val normalized = if (address.uppercase().startsWith("C0")) {
+                    "00${address.drop(2)}"
+                } else {
+                    address.uppercase()
+                }
+                val advertised = name.substringAfterLast(',', "").trim().uppercase()
+                val snCode = if (advertised.length == 12 && advertised.all { it.isDigit() || it in 'A'..'F' }) {
+                    advertised
+                } else {
+                    normalized.replace(":", "")
+                }
+                devices[normalized] = mapOf(
+                    "name" to name,
+                    "address" to normalized,
+                    "snCode" to snCode,
+                    "rssi" to scanResult.rssi,
+                )
+            }
+
+            override fun onScanFailed(errorCode: Int) {
+                finish(errorCode)
+            }
+        }
+        bluetoothScanCallback = callback
+        try {
+            scanner.startScan(
+                null,
+                ScanSettings.Builder().setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY).build(),
+                callback,
+            )
+            handler.postDelayed({ finish() }, 12_000L)
+        } catch (error: Exception) {
+            bluetoothScanCallback = null
+            result.error("bluetooth_scan_failed", error.message ?: "蓝牙扫描启动失败", null)
         }
     }
 

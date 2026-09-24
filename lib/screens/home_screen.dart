@@ -10,7 +10,6 @@ import '../models/homework.dart';
 import '../models/quick_link.dart';
 import '../services/notification_service.dart';
 import '../services/weread_service.dart';
-import '../services/external_app_service.dart';
 import '../widgets/schedule_grid.dart';
 import 'course_editor_screen.dart';
 import 'browser_screen.dart';
@@ -22,6 +21,8 @@ import 'wzu_sync_screen.dart';
 import 'weread_screen.dart';
 import 'activity_timeline_screen.dart';
 import 'academic_status_screen.dart';
+import 'shower_screen.dart';
+import 'webdav_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key, required this.store});
@@ -1179,16 +1180,30 @@ class _ProfilePage extends StatelessWidget {
                   child: ListTile(
                     leading: const Icon(Icons.shower_outlined),
                     title: const Text('打开洗澡'),
-                    subtitle: const Text('趣智轻享 quzhi-lite · 未安装时打开开源项目页'),
-                    trailing: const Icon(Icons.open_in_new_rounded),
-                    onTap: () async {
-                      final opened = await ExternalAppService.openQuzhiLite();
-                      if (!opened && context.mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('暂时无法打开趣智轻享或项目页面')),
-                        );
-                      }
-                    },
+                    subtitle: const Text('应用内登录、扫描设备并控制热水'),
+                    trailing: const Icon(Icons.chevron_right_rounded),
+                    onTap: () => Navigator.of(context).push(
+                      MaterialPageRoute<void>(
+                        builder: (_) => const ShowerScreen(),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+              if (store.webDavEnabled) ...[
+                const SizedBox(height: 10),
+                Card(
+                  clipBehavior: Clip.antiAlias,
+                  child: ListTile(
+                    leading: const Icon(Icons.cloud_sync_outlined),
+                    title: const Text('WebDAV 课表同步'),
+                    subtitle: const Text('备份或恢复学期、课程和作息'),
+                    trailing: const Icon(Icons.chevron_right_rounded),
+                    onTap: () => Navigator.of(context).push(
+                      MaterialPageRoute<void>(
+                        builder: (_) => WebDavScreen(store: store),
+                      ),
+                    ),
                   ),
                 ),
               ],

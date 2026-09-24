@@ -24,6 +24,10 @@ class _AcademicStatusScreenState extends State<AcademicStatusScreen> {
     super.initState();
     _controller = WebViewController()
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
+      ..addJavaScriptChannel(
+        'AcademicSync',
+        onMessageReceived: (message) => _handleResult(message.message),
+      )
       ..setNavigationDelegate(
         NavigationDelegate(
           onProgress: (value) {
@@ -38,37 +42,51 @@ class _AcademicStatusScreenState extends State<AcademicStatusScreen> {
     if (_extracting) return;
     setState(() => _extracting = true);
     try {
-      final raw = await _controller.runJavaScriptReturningResult(
-        _extractScript,
-      );
-      dynamic decoded = raw;
-      if (decoded is String) {
-        decoded = jsonDecode(decoded);
-        if (decoded is String) decoded = jsonDecode(decoded);
+      await _controller.runJavaScript(_extractScript);
+      Future<void>.delayed(const Duration(seconds: 25), () {
+        if (!mounted || !_extracting) return;
+        setState(() => _extracting = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('读取超时，请确认已登录且当前网络可访问教务系统')),
+        );
+      });
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('读取失败：$error')));
       }
-      final list = decoded is List ? decoded : const [];
-      final groups = list
+      if (mounted) setState(() => _extracting = false);
+    }
+  }
+
+  void _handleResult(String raw) {
+    if (!mounted) return;
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is Map && decoded['error'] != null) {
+        throw FormatException(decoded['error'].toString());
+      }
+      final list = decoded is Map ? decoded['groups'] : null;
+      final groups = (list is List ? list : const [])
           .whereType<Map>()
           .map(
             (item) => _AcademicGroup.fromJson(Map<String, dynamic>.from(item)),
           )
           .where((item) => item.rows.isNotEmpty)
           .toList();
-      if (!mounted) return;
+      setState(() {
+        _extracting = false;
+        if (groups.isNotEmpty) _groups = groups;
+      });
       if (groups.isEmpty) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('没有读取到学业数据，请先登录并等待页面完全加载')),
+          const SnackBar(content: Text('没有读取到培养方案数据，请确认已登录并打开学生学业情况页面')),
         );
-      } else {
-        setState(() => _groups = groups);
       }
     } catch (error) {
-      if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('读取失败：$error')));
-      }
-    } finally {
-      if (mounted) setState(() => _extracting = false);
+      setState(() => _extracting = false);
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('学业数据解析失败：$error')));
     }
   }
 
@@ -200,42 +218,57 @@ class _AcademicGroup {
 }
 
 const _extractScript = r'''
-(() => {
+(async () => {
   const clean = value => String(value || '').replace(/\s+/g, ' ').trim();
   const groups = [];
-  const seen = new Set();
-  const headingFor = node => {
-    const own = node.querySelector('caption, .panel-title, .card-title, legend');
-    if (own && clean(own.textContent)) return clean(own.textContent);
-    let prev = node.previousElementSibling;
-    for (let i = 0; prev && i < 5; i++, prev = prev.previousElementSibling) {
-      if (/^H[1-6]$/.test(prev.tagName) || prev.matches('.title,.panel-heading,.tab-title')) {
-        const value = clean(prev.textContent); if (value) return value;
+  try {
+    const summary = clean(document.querySelector('#alertBox')?.textContent);
+    if (summary) groups.push({title: '学业概览', rows: [[summary]]});
+    const nodes = [...document.querySelectorAll('span[id^="showKc"]')];
+    if (!nodes.length) throw new Error('当前页面没有找到培养方案节点');
+    const marker = location.pathname.indexOf('/xsxy/');
+    const root = marker >= 0 ? location.pathname.substring(0, marker) : '/jwglxt';
+    const endpoint = root.replace(/\/$/, '') +
+      '/xsxy/xsxyqk_cxJxzxjhxfyqKcxx.html?gnmkdm=N105515';
+    for (const node of nodes) {
+      const id = String(node.id || '').replace(/^showKc/, '');
+      if (!id) continue;
+      let container = node.parentElement;
+      for (let depth = 0; container && depth < 7; depth++) {
+        if (/要求学分|获得学分|未获得学分/.test(clean(container.textContent))) break;
+        container = container.parentElement;
       }
+      container = container || node.closest('li, .panel, .row, tr, div') || node.parentElement;
+      const text = clean(container?.textContent);
+      const title = clean(text.split(/要求学分|获得学分|未获得学分/)[0]) || `培养方案 ${id}`;
+      const credits = text.match(/要求学分\s*[:：]?\s*([\d.]+).*?获得学分\s*[:：]?\s*([\d.]+).*?未获得学分\s*[:：]?\s*([\d.]+)/);
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        credentials: 'include',
+        headers: {'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8'},
+        body: new URLSearchParams({xfyqjd_id: id}).toString()
+      });
+      if (!response.ok) throw new Error(`${title}读取失败：HTTP ${response.status}`);
+      const payload = await response.json();
+      const list = Array.isArray(payload) ? payload : (payload.items || payload.rows || []);
+      const rows = [];
+      if (credits) rows.push(['学分进度', `要求 ${credits[1]}`, `已获 ${credits[2]}`, `未获 ${credits[3]}`]);
+      for (const item of list) {
+        const status = Number(item.XDZT) === 1 ? '已修' : (Number(item.XDZT) === 0 ? '未修' : '修读中');
+        rows.push([
+          clean(item.KCMC || item.kcmc || item.KCH || '未命名课程'),
+          clean(item.KCXZMC || item.kcxzmc || ''),
+          item.XF == null ? '' : `学分 ${item.XF}`,
+          item.MAXCJ == null ? '' : `成绩 ${item.MAXCJ}`,
+          item.JD == null ? '' : `绩点 ${item.JD}`,
+          status
+        ].filter(Boolean));
+      }
+      if (rows.length) groups.push({title, rows});
     }
-    return '学业信息';
-  };
-  const documents = [document];
-  for (const frame of document.querySelectorAll('iframe')) {
-    try { if (frame.contentDocument) documents.push(frame.contentDocument); } catch (_) {}
+    AcademicSync.postMessage(JSON.stringify({groups}));
+  } catch (error) {
+    AcademicSync.postMessage(JSON.stringify({error: String(error?.message || error)}));
   }
-  for (const doc of documents) {
-    for (const table of doc.querySelectorAll('table')) {
-      const rows = [...table.querySelectorAll('tr')].map(tr =>
-        [...tr.querySelectorAll(':scope > th, :scope > td')].map(cell => clean(cell.textContent)).filter(Boolean)
-      ).filter(row => row.length);
-      if (!rows.length) continue;
-      const title = headingFor(table);
-      const key = title + JSON.stringify(rows);
-      if (!seen.has(key)) { seen.add(key); groups.push({title, rows}); }
-    }
-    const pairs = [];
-    for (const node of doc.querySelectorAll('dl, .form-group, .info-item, [class*=credit], [class*=score]')) {
-      const labels = [...node.querySelectorAll('dt,dd,label,.control-label,.value')].map(x => clean(x.textContent)).filter(Boolean);
-      if (labels.length >= 2 && labels.length <= 8) pairs.push(labels);
-    }
-    if (pairs.length) groups.push({title: '页面补充信息', rows: pairs});
-  }
-  return JSON.stringify(groups);
 })()
 ''';

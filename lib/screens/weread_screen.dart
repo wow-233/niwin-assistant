@@ -99,10 +99,18 @@ class _ExperimentalScreenState extends State<ExperimentalScreen> {
                   const Divider(height: 1, indent: 56),
                   SwitchListTile(
                     secondary: const Icon(Icons.shower_outlined),
-                    title: const Text('趣智轻享洗澡快捷入口'),
-                    subtitle: const Text('在“我的”一键打开 quzhi-lite；未安装时打开项目页'),
+                    title: const Text('应用内洗澡'),
+                    subtitle: const Text('在应用内登录、扫描设备并控制热水'),
                     value: widget.store.showerEnabled,
                     onChanged: widget.store.setShowerEnabled,
+                  ),
+                  const Divider(height: 1, indent: 56),
+                  SwitchListTile(
+                    secondary: const Icon(Icons.cloud_sync_outlined),
+                    title: const Text('WebDAV 课表同步'),
+                    subtitle: const Text('仅同步学期、课程和作息，不包含其他数据'),
+                    value: widget.store.webDavEnabled,
+                    onChanged: widget.store.setWebDavEnabled,
                   ),
                   const Divider(height: 1, indent: 56),
                   SwitchListTile(

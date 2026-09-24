@@ -58,6 +58,7 @@ class ScheduleStore extends ChangeNotifier {
   static const _timelineEnabledKey = 'timelineEnabled.v1';
   static const _academicEnabledKey = 'academicEnabled.v1';
   static const _showerEnabledKey = 'showerEnabled.v1';
+  static const _webDavEnabledKey = 'webDavEnabled.v1';
   static const _activityKey = 'activityTimeline.v1';
 
   final SharedPreferences _preferences;
@@ -106,6 +107,7 @@ class ScheduleStore extends ChangeNotifier {
   bool timelineEnabled = false;
   bool academicEnabled = false;
   bool showerEnabled = false;
+  bool webDavEnabled = false;
   Timer? _notificationSyncTimer;
 
   Future<void> load() async {
@@ -149,6 +151,7 @@ class ScheduleStore extends ChangeNotifier {
     timelineEnabled = _preferences.getBool(_timelineEnabledKey) ?? false;
     academicEnabled = _preferences.getBool(_academicEnabledKey) ?? false;
     showerEnabled = _preferences.getBool(_showerEnabledKey) ?? false;
+    webDavEnabled = _preferences.getBool(_webDavEnabledKey) ?? false;
     final rawPeriods = _preferences.getString(_periodTimesKey);
     if (rawPeriods != null) {
       try {
@@ -727,6 +730,12 @@ class ScheduleStore extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<void> setWebDavEnabled(bool value) async {
+    webDavEnabled = value;
+    await _preferences.setBool(_webDavEnabledKey, value);
+    notifyListeners();
+  }
+
   Future<void> clearActivity() async {
     _activity.clear();
     await _preferences.remove(_activityKey);
@@ -788,6 +797,67 @@ class ScheduleStore extends ChangeNotifier {
       'activeSemesterId': activeSemesterId,
       'semesters': _semesters.map((item) => item.toJson()).toList(),
     });
+  }
+
+  String exportTimetableJson() {
+    _upsertActiveSemester();
+    return const JsonEncoder.withIndent('  ').convert({
+      'format': 'niwin-timetable',
+      'version': 1,
+      'exportedAt': DateTime.now().toIso8601String(),
+      'activeSemesterId': activeSemesterId,
+      'semesters': _semesters.map((item) => item.toJson()).toList(),
+      'periodTimes': periodTimes.map((item) => item.toJson()).toList(),
+    });
+  }
+
+  Future<void> importTimetableJson(String raw) async {
+    final decoded = jsonDecode(raw);
+    if (decoded is! Map || decoded['format'] != 'niwin-timetable') {
+      throw const FormatException('不是泥win助手课表同步文件');
+    }
+    final map = Map<String, dynamic>.from(decoded);
+    final imported = (map['semesters'] as List<dynamic>? ?? const [])
+        .map(
+          (item) => Semester.fromJson(Map<String, dynamic>.from(item as Map)),
+        )
+        .toList();
+    if (imported.isEmpty) throw const FormatException('同步文件中没有学期');
+    final importedPeriods = (map['periodTimes'] as List<dynamic>? ?? const [])
+        .map(
+          (item) => PeriodTime.fromJson(Map<String, dynamic>.from(item as Map)),
+        )
+        .toList();
+    _semesters
+      ..clear()
+      ..addAll(imported);
+    final requested = map['activeSemesterId']?.toString();
+    final selected = _semesters.firstWhere(
+      (item) => item.id == requested,
+      orElse: () => _semesters.first,
+    );
+    activeSemesterId = selected.id;
+    semesterStart = selected.startDate;
+    semesterWeeks = selected.totalWeeks;
+    _courses
+      ..clear()
+      ..addAll(selected.courses);
+    if (importedPeriods.isNotEmpty) periodTimes = importedPeriods;
+    await _persistCourses();
+    await Future.wait([
+      _persistPeriods(),
+      _preferences.setString(
+        _semesterStartKey,
+        semesterStart.toIso8601String(),
+      ),
+    ]);
+    await _recordActivity(
+      'WebDAV 恢复课表',
+      '已恢复 ${_semesters.length} 个学期',
+      'sync',
+    );
+    _scheduleNotificationSync();
+    notifyListeners();
   }
 
   Future<void> importBackupJson(String raw) async {

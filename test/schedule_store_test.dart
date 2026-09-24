@@ -62,6 +62,40 @@ void main() {
     expect(store.timelineEnabled, isFalse);
     expect(store.academicEnabled, isFalse);
     expect(store.showerEnabled, isFalse);
+    expect(store.webDavEnabled, isFalse);
     store.dispose();
+  });
+
+  test('WebDAV timetable payload excludes non-timetable data', () async {
+    SharedPreferences.setMockInitialValues({});
+    final preferences = await SharedPreferences.getInstance();
+    final store = ScheduleStore(preferences);
+    await store.load();
+    await store.saveCourse(
+      const Course(
+        id: 'webdav-course',
+        name: 'WebDAV 课程',
+        weekday: 3,
+        startSection: 5,
+        sectionCount: 2,
+        weeks: {1, 3, 5},
+        location: '北校区 2-201',
+      ),
+    );
+
+    final payload = store.exportTimetableJson();
+    expect(payload, contains('niwin-timetable'));
+    expect(payload, contains('WebDAV 课程'));
+    expect(payload, isNot(contains('homework')));
+    expect(payload, isNot(contains('countdowns')));
+    expect(payload, isNot(contains('quickLinks')));
+
+    final restored = ScheduleStore(preferences);
+    await restored.load();
+    await restored.importTimetableJson(payload);
+    expect(restored.courses.single.name, 'WebDAV 课程');
+    expect(restored.courses.single.location, '北校区 2-201');
+    store.dispose();
+    restored.dispose();
   });
 }
