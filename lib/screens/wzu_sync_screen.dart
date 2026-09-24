@@ -89,9 +89,14 @@ class _WzuSyncScreenState extends State<WzuSyncScreen> {
 
   Future<void> _extractCourses() async {
     if (_loading) return;
-    if (mounted) setState(() => _status = '正在读取当前课表页面…');
+    const pendingStatus = '正在读取当前课表页面…';
+    if (mounted) setState(() => _status = pendingStatus);
     try {
       await _controller.runJavaScript(wzuAssistantScript);
+      await Future<void>.delayed(const Duration(seconds: 4));
+      if (mounted && _status == pendingStatus) {
+        setState(() => _status = '未收到提取结果。请保持在“表格”页面再试；若仍失败，请截图此提示');
+      }
     } catch (_) {
       if (mounted) setState(() => _status = '无法读取当前页，请确认已经打开个人课表');
     }

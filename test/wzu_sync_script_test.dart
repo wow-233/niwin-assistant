@@ -18,5 +18,7 @@ void main() {
       wzuAssistantScript,
       contains("paragraphField(node, ['上课地点', '地点', '教室', '场地'], 1)"),
     );
+    expect(wzuAssistantScript, isNot(contains("querySelectorAll(':scope > p")));
+    expect(wzuAssistantScript, contains('})().catch(error =>'));
   });
 }

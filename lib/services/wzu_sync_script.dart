@@ -79,30 +79,39 @@ const wzuAssistantScript = r'''
   };
   const paragraphField = (node, labels, fallbackIndex) => {
     if (!node || !node.querySelectorAll) return '';
-    const paragraphs = [...node.querySelectorAll(':scope > p, :scope > div > p')];
-    for (const paragraph of paragraphs) {
-      const raw = clean(paragraph.textContent);
-      for (const label of labels) {
-        const match = raw.match(new RegExp(label + '\\s*[:：]?\\s*(.+)'));
-        if (match && clean(match[1])) return clean(match[1]);
+    try {
+      const paragraphs = [...node.querySelectorAll('p')];
+      for (const paragraph of paragraphs) {
+        const raw = clean(paragraph.textContent);
+        for (const label of labels) {
+          const match = raw.match(new RegExp(label + '\\s*[:：]?\\s*(.+)'));
+          if (match && clean(match[1])) return clean(match[1]);
+        }
       }
-    }
-    // WZU's grid view hides the labels with CSS. innerText therefore contains
-    // only the value: p[0]=section/week, p[1]=location, p[2]=teacher.
-    if (node.matches && node.matches('.timetable_con') && paragraphs[fallbackIndex]) {
-      const paragraph = paragraphs[fallbackIndex];
-      const visibleValues = [...paragraph.querySelectorAll('font, span')]
-        .filter(element => !element.matches('.hidden, [hidden], [aria-hidden="true"]'))
-        .map(element => clean(element.innerText || element.textContent))
-        .filter(value => value && !labels.some(label => value === label || value === label + '：'));
-      if (visibleValues.length) return visibleValues[visibleValues.length - 1];
-      let value = clean(paragraph.innerText || paragraph.textContent);
-      for (const label of labels) {
-        value = value.replace(new RegExp('^' + label + '\\s*[:：]?\\s*'), '');
+      // WZU's grid view hides labels with CSS. innerText therefore contains
+      // only the value: p[0]=section/week, p[1]=location, p[2]=teacher.
+      const classes = ' ' + clean(node.className) + ' ';
+      if (classes.includes(' timetable_con ') && paragraphs[fallbackIndex]) {
+        const paragraph = paragraphs[fallbackIndex];
+        const visibleValues = [...paragraph.querySelectorAll('font, span')]
+          .filter(element => {
+            const elementClasses = ' ' + clean(element.className) + ' ';
+            return !elementClasses.includes(' hidden ') &&
+              !element.hasAttribute('hidden') && element.getAttribute('aria-hidden') !== 'true';
+          })
+          .map(element => clean(element.innerText || element.textContent))
+          .filter(value => value && !labels.some(label => value === label || value === label + '：'));
+        if (visibleValues.length) return visibleValues[visibleValues.length - 1];
+        let value = clean(paragraph.innerText || paragraph.textContent);
+        for (const label of labels) {
+          value = value.replace(new RegExp('^' + label + '\\s*[:：]?\\s*'), '');
+        }
+        return clean(value);
       }
-      return clean(value);
+      return '';
+    } catch (_) {
+      return '';
     }
-    return '';
   };
   const normalizeApiItem = (course) => {
     const sectionsText = apiField(course, ['jcs', 'jc', 'jcsText']);
@@ -345,5 +354,12 @@ const wzuAssistantScript = r'''
   } else {
     send({type: 'status', message: '没有找到结构明确的课程。请先打开“个人课表”、选好学期并查询，再点提取。'});
   }
-})();
+})().catch(error => {
+  try {
+    WzuSync.postMessage(JSON.stringify({
+      type: 'status',
+      message: '提取失败：' + String(error && error.message ? error.message : error)
+    }));
+  } catch (_) {}
+});
 ''';
