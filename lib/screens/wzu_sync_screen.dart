@@ -190,6 +190,8 @@ class _WzuSyncScreenState extends State<WzuSyncScreen> {
                   Text(
                     _extractMethod.startsWith('zhengfang-api')
                         ? '已读取正方结构化数据，并用页面上显示的教师和地点补齐缺失字段。导入只替换上次同步的课程。'
+                        : _extractMethod.startsWith('zhengfang-general')
+                        ? '已按正方通用课表结构读取节次、周次、地点和教师。请在确认导入前抽查几门课。'
                         : '已按合并单元格坐标解析。请重点核对星期、节次和周次；手动课程会保留。',
                     style: Theme.of(context).textTheme.bodyMedium,
                   ),

@@ -20,5 +20,21 @@ void main() {
     );
     expect(wzuAssistantScript, isNot(contains("querySelectorAll(':scope > p")));
     expect(wzuAssistantScript, contains('})().catch(error =>'));
+    expect(
+      wzuAssistantScript,
+      contains("document.querySelector('#kbgrid_table_0')"),
+    );
+    expect(
+      wzuAssistantScript,
+      contains("cell.querySelectorAll('.timetable_con')"),
+    );
+    expect(
+      wzuAssistantScript,
+      contains("confidence: 'zhengfang-general-grid'"),
+    );
+    expect(
+      wzuAssistantScript,
+      contains("document.querySelector('#kblist_table')"),
+    );
   });
 }

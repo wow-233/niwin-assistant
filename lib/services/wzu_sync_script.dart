@@ -134,6 +134,105 @@ const wzuAssistantScript = r'''
       confidence: 'api'
     };
   };
+  // Adapted from the MIT-licensed Shiguang Schedule generic Zhengfang
+  // adapter. WZU currently uses the same #kbgrid_table_0 / #kblist_table
+  // structures, so prefer this deterministic path before the matrix fallback.
+  const lastVisibleField = (container, labels) => {
+    if (!container) return '';
+    const candidates = [...container.querySelectorAll('font, span')]
+      .filter(element => {
+        const classes = ' ' + clean(element.className) + ' ';
+        return !classes.includes(' hidden ') &&
+          !element.hasAttribute('hidden') && element.getAttribute('aria-hidden') !== 'true';
+      })
+      .map(element => clean(element.innerText || element.textContent))
+      .filter(Boolean);
+    let value = candidates.length
+      ? candidates[candidates.length - 1]
+      : clean(container.innerText || container.textContent);
+    for (const label of labels) {
+      value = value.replace(new RegExp('^' + label + '\\s*[:：]?\\s*'), '');
+    }
+    return clean(value);
+  };
+  const parseZhengfangGrid = () => {
+    const table = document.querySelector('#kbgrid_table_0');
+    if (!table) return [];
+    const result = [];
+    for (const cell of table.querySelectorAll('td.td_wrap[id]')) {
+      const day = Number(String(cell.id || '').split('-')[0]);
+      if (!(day >= 1 && day <= 7)) continue;
+      for (const block of cell.querySelectorAll('.timetable_con')) {
+        const title = block.querySelector('.title font, .title');
+        const name = clean(title && title.textContent).replace(/[●★○]/g, '').trim();
+        const paragraphs = [...block.querySelectorAll('p')]
+          .filter(paragraph => !(' ' + clean(paragraph.className) + ' ').includes(' title '));
+        const info = lastVisibleField(paragraphs[0], ['节/周', '周次', '周数']);
+        const sections = sectionsFromText(info);
+        const weeksText = clean(info.replace(/^.*?\)/, ''));
+        const courseLocation = lastVisibleField(
+          paragraphs[1],
+          ['上课地点', '地点', '教室', '场地']
+        );
+        const teacher = lastVisibleField(paragraphs[2], ['教师', '老师', '主讲']);
+        if (!name || !sections || !weeksText) continue;
+        result.push({
+          name,
+          text: clean(block.innerText || block.textContent),
+          day,
+          startSection: sections[0],
+          sectionCount: sections[1] - sections[0] + 1,
+          sectionsText: info,
+          weeksText,
+          teacher,
+          location: courseLocation,
+          confidence: 'zhengfang-general-grid'
+        });
+      }
+    }
+    return result;
+  };
+  const parseZhengfangList = () => {
+    const table = document.querySelector('#kblist_table');
+    if (!table) return [];
+    const result = [];
+    const bodies = [...table.querySelectorAll('tbody')];
+    for (let day = 1; day < Math.min(bodies.length, 8); day++) {
+      let rememberedSections = null;
+      const rows = [...bodies[day].querySelectorAll('tr')].slice(1);
+      for (const row of rows) {
+        const cells = [...row.querySelectorAll('td')];
+        if (!cells.length) continue;
+        const courseCell = cells.length > 1 ? cells[1] : cells[0];
+        if (cells.length > 1) rememberedSections = sectionsFromText(cells[0].textContent);
+        const sections = rememberedSections;
+        const title = courseCell.querySelector('.title font, .title');
+        const name = clean(title && title.textContent).replace(/[●★○]/g, '').trim();
+        const paragraphs = [...courseCell.querySelectorAll('p')]
+          .filter(paragraph => !(' ' + clean(paragraph.className) + ' ').includes(' title '));
+        const weeksText = lastVisibleField(paragraphs[0], ['周数', '周次']);
+        const courseLocation = lastVisibleField(
+          paragraphs[1],
+          ['上课地点', '地点', '教室', '场地']
+        );
+        const teacher = lastVisibleField(paragraphs[2], ['教师', '老师', '主讲']);
+        if (!name || !sections || !weeksText) continue;
+        result.push({
+          name,
+          text: clean(courseCell.innerText || courseCell.textContent),
+          day,
+          startSection: sections[0],
+          sectionCount: sections[1] - sections[0] + 1,
+          sectionsText: clean(cells.length > 1 ? cells[0].textContent : ''),
+          weeksText,
+          teacher,
+          location: courseLocation,
+          confidence: 'zhengfang-general-list'
+        });
+      }
+    }
+    return result;
+  };
   const findCourseList = (value, depth = 0) => {
     if (depth > 5 || !value || typeof value !== 'object') return null;
     if (Array.isArray(value)) {
@@ -200,6 +299,19 @@ const wzuAssistantScript = r'''
     }
   } catch (_) {
     // Some deployments disable this endpoint; continue with DOM parsing.
+  }
+
+  const viewType = clean(document.querySelector('#shcPDF')?.dataset?.type);
+  const zhengfangItems = viewType === 'list'
+    ? parseZhengfangList()
+    : parseZhengfangGrid();
+  if (zhengfangItems.length) {
+    send({
+      type: 'courses',
+      items: zhengfangItems,
+      method: viewType === 'list' ? 'zhengfang-general-list' : 'zhengfang-general-grid'
+    });
+    return;
   }
 
   const items = [];
