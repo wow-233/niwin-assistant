@@ -37,5 +37,6 @@ void main() {
       contains("document.querySelector('#kblist_table')"),
     );
     expect(wzuAssistantScript, isNot(contains('.hasAttribute(')));
+    expect(wzuAssistantScript, isNot(contains('.getAttribute(')));
   });
 }

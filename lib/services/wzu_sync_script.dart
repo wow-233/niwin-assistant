@@ -40,7 +40,8 @@ const wzuAssistantScript = r'''
       if (!node) continue;
       const kebab = name.replace(/[A-Z]/g, c => '-' + c.toLowerCase());
       for (const candidate of [name, kebab, 'data-' + kebab]) {
-        const value = node.getAttribute && node.getAttribute(candidate);
+        const getter = node && node['getAttribute'];
+        const value = typeof getter === 'function' ? getter.call(node, candidate) : null;
         if (value !== null && clean(value) !== '') return clean(value);
       }
       if (node.dataset && node.dataset[name] !== undefined) return clean(node.dataset[name]);
@@ -63,8 +64,10 @@ const wzuAssistantScript = r'''
   const titledField = (node, labels) => {
     if (!node || !node.querySelectorAll) return '';
     for (const element of node.querySelectorAll('[title], [data-original-title], [aria-label]')) {
-      const hint = clean(element.getAttribute('title') ||
-        element.getAttribute('data-original-title') || element.getAttribute('aria-label'));
+      const getter = element && element['getAttribute'];
+      if (typeof getter !== 'function') continue;
+      const hint = clean(getter.call(element, 'title') ||
+        getter.call(element, 'data-original-title') || getter.call(element, 'aria-label'));
       if (!labels.some(label => hint.includes(label))) continue;
       const own = clean(element.textContent);
       if (own && !labels.some(label => own === label)) return own;
@@ -94,11 +97,6 @@ const wzuAssistantScript = r'''
       if (classes.includes(' timetable_con ') && paragraphs[fallbackIndex]) {
         const paragraph = paragraphs[fallbackIndex];
         const visibleValues = [...paragraph.querySelectorAll('font, span')]
-          .filter(element => {
-            const elementClasses = ' ' + clean(element.className) + ' ';
-            return !elementClasses.includes(' hidden ') &&
-              element.getAttribute('hidden') === null && element.getAttribute('aria-hidden') !== 'true';
-          })
           .map(element => clean(element.innerText || element.textContent))
           .filter(value => value && !labels.some(label => value === label || value === label + '：'));
         if (visibleValues.length) return visibleValues[visibleValues.length - 1];
@@ -140,13 +138,8 @@ const wzuAssistantScript = r'''
   const lastVisibleField = (container, labels) => {
     if (!container) return '';
     const candidates = [...container.querySelectorAll('font, span')]
-      .filter(element => {
-        const classes = ' ' + clean(element.className) + ' ';
-        return !classes.includes(' hidden ') &&
-          element.getAttribute('hidden') === null && element.getAttribute('aria-hidden') !== 'true';
-      })
       .map(element => clean(element.innerText || element.textContent))
-      .filter(Boolean);
+      .filter(value => value && !labels.some(label => value === label || value === label + '：'));
     let value = candidates.length
       ? candidates[candidates.length - 1]
       : clean(container.innerText || container.textContent);
