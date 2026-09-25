@@ -97,7 +97,7 @@ const wzuAssistantScript = r'''
           .filter(element => {
             const elementClasses = ' ' + clean(element.className) + ' ';
             return !elementClasses.includes(' hidden ') &&
-              !element.hasAttribute('hidden') && element.getAttribute('aria-hidden') !== 'true';
+              element.getAttribute('hidden') === null && element.getAttribute('aria-hidden') !== 'true';
           })
           .map(element => clean(element.innerText || element.textContent))
           .filter(value => value && !labels.some(label => value === label || value === label + '：'));
@@ -143,7 +143,7 @@ const wzuAssistantScript = r'''
       .filter(element => {
         const classes = ' ' + clean(element.className) + ' ';
         return !classes.includes(' hidden ') &&
-          !element.hasAttribute('hidden') && element.getAttribute('aria-hidden') !== 'true';
+          element.getAttribute('hidden') === null && element.getAttribute('aria-hidden') !== 'true';
       })
       .map(element => clean(element.innerText || element.textContent))
       .filter(Boolean);
