@@ -1,3 +1,12 @@
+// Copyright 2026 wow-233
+// SPDX-License-Identifier: Apache-2.0
+//
+// The generic Zhengfang (正方) grid/list parsing paths below are adapted from
+// the MIT-licensed Shiguang Schedule adapter warehouse
+// (https://github.com/XingHeYuZhuan/shiguang_warehouse), file
+// resources/zhengfang_jiaowu/zhengfang_01.js, Copyright (c) 2025 星河欲转.
+// The MIT license text is reproduced in THIRD_PARTY_REFERENCES.md.
+
 /// Manual extractor for Zhengfang-style timetable pages.
 ///
 /// The user starts extraction explicitly. The script never clicks controls or

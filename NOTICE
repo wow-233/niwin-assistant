@@ -1,0 +1,23 @@
+niwin 助手 (niwin-assistant)
+Copyright 2026 wow-233
+
+This product is licensed under the Apache License, Version 2.0.
+See the LICENSE file for the full license text.
+
+This product includes software adapted from the following third-party
+project, used under its own license:
+
+  * 拾光课程表适配脚本仓库 (Shiguang Schedule adapter warehouse)
+    https://github.com/XingHeYuZhuan/shiguang_warehouse
+    Copyright (c) 2025 星河欲转
+    Licensed under the MIT License.
+
+    The generic Zhengfang (正方) grid/list parsing paths in
+    lib/services/wzu_sync_script.dart are adapted from
+    resources/zhengfang_jiaowu/zhengfang_01.js in that repository.
+
+    Full MIT license text: see THIRD_PARTY_REFERENCES.md
+
+Other projects that were studied for product and protocol design only,
+without copying source code or assets, are listed in
+THIRD_PARTY_REFERENCES.md.

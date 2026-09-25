@@ -80,3 +80,9 @@ test/         解析与界面测试
 ## 说明
 
 本项目不是温州大学官方应用。产品与导入架构调研参考了 [拾光课程表](https://github.com/XingHeYuZhuan/shiguangschedule)、[Sleepy](https://github.com/lingion/sleepy) 和 [下节啥课](https://github.com/baoozak/timetable)。详细参考范围与许可证见 [THIRD_PARTY_REFERENCES.md](THIRD_PARTY_REFERENCES.md)。
+
+## 许可证
+
+本项目以 [Apache License 2.0](LICENSE) 发布，版权归 wow-233 所有。
+
+第三方代码的版权与许可证（含 MIT 归属声明）见 [NOTICE](NOTICE) 与 [THIRD_PARTY_REFERENCES.md](THIRD_PARTY_REFERENCES.md)。
